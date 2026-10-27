@@ -50,7 +50,7 @@ export const UPGRADES: Record<UpgradeKey, UpgradeDef> = {
   hull: { name: 'Hull', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // max hull
   engine: { name: 'Engine', values: [1, 1.12, 1.25, 1.4, 1.55], format: (v) => `${Math.round(v * 100)}%` }, // thrust and top speed
   fuel: { name: 'Fuel', values: [10, 15, 22, 32, 45], format: (v) => `${v}L` }, // tank litres
-  cargo: { name: 'Cargo', values: [10, 14, 19, 25, 32], format: (v) => `${v}` }, // items
+  cargo: { name: 'Cargo', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // items
 };
 
 export const FUEL = {
