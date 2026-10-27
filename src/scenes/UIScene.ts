@@ -26,14 +26,22 @@ export class UIScene extends Phaser.Scene {
     this.panel = new Panel(this);
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
     const { pod, world, stats } = this.gameScene;
     const depth = Math.max(0, pod.row - world.surfaceRow + 1);
-    this.hud.update(stats, depth * METRES_PER_TILE, time);
+    this.hud.update(stats, depth * METRES_PER_TILE, time, delta / 1000);
   }
 
   toast(message: string, color?: number): void {
     this.hud.toast(message, color);
+  }
+
+  // World position (px) of a just-collected ore, for the fly-to-cargo effect.
+  oreCollected(oreIndex: number, worldX: number, worldY: number): void {
+    const cam = this.gameScene.cameras.main;
+    const x = (worldX - cam.worldView.x) * cam.zoom;
+    const y = (worldY - cam.worldView.y) * cam.zoom;
+    this.hud.flyToCargo(`ore${oreIndex}`, x, y);
   }
 
   private showPanel(spec: PanelSpec): void {

@@ -29,6 +29,7 @@ export class Hud {
   private fuel: Bar;
   private hull: Bar;
   private toastText: Phaser.GameObjects.Text | null = null;
+  private shownMoney = -1; // counts up toward the real amount
 
   constructor(private scene: Phaser.Scene) {
     this.fuel = new Bar(scene, 12, 18, 'Fuel');
@@ -44,7 +45,7 @@ export class Hud {
     this.money.x = this.scene.scale.width - 12;
   }
 
-  update(stats: PodStats, depthMetres: number, time: number): void {
+  update(stats: PodStats, depthMetres: number, time: number, dt: number): void {
     const fuelShare = stats.fuel / stats.fuelCapacity;
     const low = fuelShare < FUEL.lowWarning;
     const flash = low && Math.floor(time / 300) % 2 === 0;
@@ -54,7 +55,35 @@ export class Hud {
     this.cargo.setText(`Cargo ${stats.cargoCount}/${stats.cargoCapacity}`);
     this.cargo.setColor(stats.cargoFull ? '#ff8a3b' : '#ffffff');
     this.depth.setText(`Depth ${depthMetres} m`);
-    this.money.setText(`$${stats.money.toLocaleString()}`);
+    this.updateMoney(stats.money, dt);
+  }
+
+  private updateMoney(money: number, dt: number): void {
+    if (this.shownMoney < 0 || money < this.shownMoney) this.shownMoney = money; // spending shows at once
+    if (this.shownMoney < money) {
+      const step = Math.max(1, Math.round((money - this.shownMoney) * Math.min(1, dt * 6)));
+      this.shownMoney = Math.min(money, this.shownMoney + step);
+    }
+    this.money.setText(`$${this.shownMoney.toLocaleString()}`);
+    this.money.setScale(this.shownMoney < money ? 1.15 : 1); // swells while counting up
+  }
+
+  // An ore icon flies from where it was dug (screen px) to the cargo counter.
+  flyToCargo(frame: string, x: number, y: number): void {
+    const icon = this.scene.add.image(x, y, 'terrain', frame).setScale(0.9).setDepth(50);
+    this.scene.tweens.add({
+      targets: icon,
+      x: this.cargo.x + this.cargo.width + 10,
+      y: this.cargo.y + this.cargo.height / 2,
+      scale: 0.4,
+      duration: 450,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        icon.destroy();
+        this.cargo.setScale(1.25);
+        this.scene.tweens.add({ targets: this.cargo, scale: 1, duration: 150 });
+      },
+    });
   }
 
   toast(message: string, color = 0xffffff): void {

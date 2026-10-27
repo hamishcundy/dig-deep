@@ -116,6 +116,24 @@ export const ORES: OreDef[] = [
   { name: 'Diamond', price: 20000, minDepth: 250, weight: 1, color: 0xf4fdff },
 ];
 
+// Ground layers by depth. Each changes the look of dirt and tunnel walls.
+export interface BandDef {
+  from: number; // rows below the surface
+  style: 'soil' | 'clay' | 'stone' | 'basalt' | 'hot';
+  base: number; // dirt colour
+  dark: number; // specks and shadowed edges
+  light: number; // highlights and lit edges
+  back: number; // tunnel back wall
+}
+
+export const BANDS: BandDef[] = [
+  { from: 0, style: 'soil', base: 0x8a5a35, dark: 0x6b4428, light: 0xa8774c, back: 0x2a1a10 },
+  { from: 30, style: 'clay', base: 0x9c5f3a, dark: 0x7a4529, light: 0xbd7c52, back: 0x2e1b12 },
+  { from: 80, style: 'stone', base: 0x6e6862, dark: 0x54504b, light: 0x8b857e, back: 0x1e1c1b },
+  { from: 150, style: 'basalt', base: 0x434051, dark: 0x302e3b, light: 0x5c5970, back: 0x16151c },
+  { from: 230, style: 'hot', base: 0x5c2b22, dark: 0x401c16, light: 0x7d3b2e, back: 0x1c0b08 },
+];
+
 export const GEN = {
   oreChance: 0.09, // chance a dirt tile holds ore
   boulderStartDepth: 15,

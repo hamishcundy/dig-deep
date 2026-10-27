@@ -1,5 +1,3 @@
-import { ORES } from '../config';
-
 // Tile ids double as tileset frame indexes.
 export const Tile = {
   Empty: 0,
@@ -10,8 +8,6 @@ export const Tile = {
   Pad: 5, // concrete under a building
   FirstOre: 6, // ORES[i] is tile FirstOre + i
 } as const;
-
-export const TILE_COUNT = Tile.FirstOre + ORES.length;
 
 export function oreTile(oreIndex: number): number {
   return Tile.FirstOre + oreIndex;

@@ -4,12 +4,13 @@ import { PodStats } from '../game/PodStats';
 import { Controls } from '../input/Controls';
 import { Pod, type DugTile } from '../pod/Pod';
 import { World } from '../world/World';
-import { isOre, oreIndex, Tile } from '../world/tiles';
-import { makeTextures, POD_ORIGIN_Y } from './textures';
+import { isOre, oreIndex } from '../world/tiles';
+import { PodView } from './PodView';
+import { Terrain } from './Terrain';
+import { makeTextures } from './textures';
 import type { UIScene } from './UIScene';
 
 const SKY = 0x7ec8e3;
-const TUNNEL = 0x24160c;
 const PAD_STOP_SPEED = 1.5; // tiles/s; slower than this on a pad opens the building
 
 type Mode = 'play' | 'menu' | 'dead';
@@ -26,9 +27,8 @@ export class GameScene extends Phaser.Scene {
   pod!: Pod;
   stats!: PodStats;
   private mode: Mode = 'play';
-  private layer!: Phaser.Tilemaps.TilemapLayer;
-  private podSprite!: Phaser.GameObjects.Image;
-  private flames!: Phaser.GameObjects.Image[];
+  private terrain!: Terrain;
+  private podView!: PodView;
   private controls!: Controls;
   private ui!: UIScene;
   private snapshot!: Snapshot;
@@ -46,31 +46,18 @@ export class GameScene extends Phaser.Scene {
     console.log(`seed ${this.world.seed} (add ?seed=${this.world.seed} to the URL to replay this world)`);
 
     const { cols, rows, surfaceRow } = this.world;
-    this.cameras.main.setBackgroundColor(TUNNEL);
     this.add.rectangle(0, 0, cols * TILE, surfaceRow * TILE, SKY).setOrigin(0, 0);
     BUILDINGS.forEach((b) => this.drawBuilding(b));
 
-    const data: number[][] = [];
-    for (let r = 0; r < rows; r++) {
-      const row: number[] = [];
-      for (let c = 0; c < cols; c++) {
-        const t = this.world.get(c, r);
-        row.push(t === Tile.Empty ? -1 : t);
-      }
-      data.push(row);
-    }
-    const map = this.make.tilemap({ data, tileWidth: TILE, tileHeight: TILE });
-    const tileset = map.addTilesetImage('tiles', 'tiles', TILE, TILE, 0, 0)!;
-    this.layer = map.createLayer(0, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer;
+    this.terrain = new Terrain(this, this.world);
 
     this.pod = new Pod(this.world, SPAWN_COL, surfaceRow - 1);
-    this.flames = [this.add.image(0, 0, 'flame'), this.add.image(0, 0, 'flame')];
-    this.podSprite = this.add.image(0, 0, 'pod').setOrigin(0.5, POD_ORIGIN_Y);
+    this.podView = new PodView(this, this.pod);
     this.takeSnapshot();
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, cols * TILE, rows * TILE);
-    cam.startFollow(this.podSprite, true, 0.15, 0.15);
+    cam.startFollow(this.podView.sprite, true, 0.15, 0.15);
     this.fitCamera();
     this.scale.on('resize', this.fitCamera, this);
 
@@ -100,8 +87,11 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.controls) return;
-    if (this.mode === 'play') this.step(Math.min(delta / 1000, 0.05));
-    this.drawPod();
+    const dt = Math.min(delta / 1000, 0.05);
+    if (this.mode === 'play') this.step(dt);
+    const d = this.pod.drill;
+    this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
+    this.terrain.updateSparkles(dt, this.cameras.main.worldView);
   }
 
   private step(dt: number): void {
@@ -121,9 +111,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const impact = pod.landingSpeed / TILE;
+    if (impact > 0) this.podView.landed(impact);
     if (impact > FALL.safeSpeed) {
       const damage = (impact - FALL.safeSpeed) * FALL.damagePerSpeed;
       stats.hull -= damage;
+      this.podView.hit();
       this.cameras.main.shake(150, 0.004 + damage * 0.002);
       if (stats.hull <= 0) {
         stats.hull = 0;
@@ -146,7 +138,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onDug(dug: DugTile): void {
-    this.layer.removeTileAt(dug.col, dug.row);
+    this.podView.burst(dug.col, dug.row, this.terrain.colorAt(dug.col, dug.row, dug.tile));
+    this.terrain.dug(dug.col, dug.row);
     if (!isOre(dug.tile)) return;
     const i = oreIndex(dug.tile);
     const ore = ORES[i];
@@ -155,6 +148,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.stats.cargo[i]++;
       this.ui.toast(`+${ore.name}`, ore.color);
+      this.ui.oreCollected(i, (dug.col + 0.5) * TILE, (dug.row + 0.5) * TILE);
     }
   }
 
@@ -178,15 +172,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   continueAfterDeath(): void {
-    const { world, layer, snapshot } = this;
+    const { world, snapshot } = this;
     world.cells.set(snapshot.cells);
-    for (let r = 0; r < world.rows; r++) {
-      for (let c = 0; c < world.cols; c++) {
-        const t = world.get(c, r);
-        if (t === Tile.Empty) layer.removeTileAt(c, r);
-        else layer.putTileAt(t, c, r);
-      }
-    }
+    this.terrain.redrawAll();
     this.stats = snapshot.stats.clone();
     this.pod.placeAt(snapshot.col, world.surfaceRow - 1);
     this.wasAtSurface = true;
@@ -204,24 +192,6 @@ export class GameScene extends Phaser.Scene {
     this.snapshot = { cells: this.world.cells.slice(), stats: this.stats.clone(), col: this.pod.col };
   }
 
-  private drawPod(): void {
-    const pod = this.pod;
-    const cx = pod.x + pod.w / 2;
-    const cy = pod.y + pod.h / 2;
-    const dir = pod.drillDir;
-    const shake = dir && this.mode === 'play' ? (Math.random() - 0.5) * 1.5 : 0;
-    this.podSprite
-      .setPosition(cx + shake, cy + shake)
-      .setAngle(dir === 'right' ? -90 : dir === 'left' ? 90 : 0)
-      .setFlipX(pod.facing < 0)
-      .setTint(this.mode === 'dead' ? 0xff5050 : 0xffffff);
-
-    const flicker = 0.8 + Math.random() * 0.4;
-    this.flames.forEach((f, i) => {
-      f.setVisible(pod.thrusting && this.mode === 'play');
-      f.setPosition(cx + (i === 0 ? -9 : 9), pod.y + pod.h + 4).setScale(1, flicker);
-    });
-  }
 }
 
 function padAt(col: number): BuildingDef | null {
