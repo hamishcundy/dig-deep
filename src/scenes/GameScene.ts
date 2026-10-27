@@ -6,11 +6,11 @@ import { Pod, type DugTile } from '../pod/Pod';
 import { World } from '../world/World';
 import { isOre, oreIndex } from '../world/tiles';
 import { PodView } from './PodView';
+import { Surface } from './Surface';
 import { Terrain } from './Terrain';
 import { makeTextures } from './textures';
 import type { UIScene } from './UIScene';
 
-const SKY = 0x7ec8e3;
 const PAD_STOP_SPEED = 1.5; // tiles/s; slower than this on a pad opens the building
 
 type Mode = 'play' | 'menu' | 'dead';
@@ -27,6 +27,7 @@ export class GameScene extends Phaser.Scene {
   pod!: Pod;
   stats!: PodStats;
   private mode: Mode = 'play';
+  private surface!: Surface;
   private terrain!: Terrain;
   private podView!: PodView;
   private controls!: Controls;
@@ -46,8 +47,7 @@ export class GameScene extends Phaser.Scene {
     console.log(`seed ${this.world.seed} (add ?seed=${this.world.seed} to the URL to replay this world)`);
 
     const { cols, rows, surfaceRow } = this.world;
-    this.add.rectangle(0, 0, cols * TILE, surfaceRow * TILE, SKY).setOrigin(0, 0);
-    BUILDINGS.forEach((b) => this.drawBuilding(b));
+    this.surface = new Surface(this, this.world);
 
     this.terrain = new Terrain(this, this.world);
 
@@ -66,20 +66,6 @@ export class GameScene extends Phaser.Scene {
     this.ui.events.once('create', () => (this.controls = new Controls(this, this.ui.joystick)));
   }
 
-  private drawBuilding(b: BuildingDef): void {
-    const x = b.col * TILE;
-    const w = b.width * TILE;
-    const h = 2.5 * TILE;
-    const y = this.world.surfaceRow * TILE - h;
-    this.add.rectangle(x + 4, y + 8, w - 8, h - 8, b.color).setOrigin(0, 0);
-    this.add.rectangle(x, y, w, 10, 0x3a3f47).setOrigin(0, 0);
-    this.add.rectangle(x + w / 2 - 18, y + h - 34, 36, 34, 0x1b1f24).setOrigin(0, 0);
-    this.add
-      .text(x + w / 2, y + 14, b.label, { fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#ffffff' })
-      .setOrigin(0.5, 0)
-      .setResolution(3);
-  }
-
   private fitCamera(): void {
     const { width, height } = this.scale;
     this.cameras.main.setZoom(Math.max(1, Math.min(width, height) / (VIEW.minTilesAcross * TILE)));
@@ -90,8 +76,9 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(delta / 1000, 0.05);
     if (this.mode === 'play') this.step(dt);
     const d = this.pod.drill;
-    this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0, this.stats.cargoFull);
+    this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
+    this.surface.update(dt);
   }
 
   private step(dt: number): void {

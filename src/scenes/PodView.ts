@@ -12,7 +12,6 @@ export class PodView {
   private exhaust: Phaser.GameObjects.Particles.ParticleEmitter;
   private dirt: Phaser.GameObjects.Particles.ParticleEmitter;
   private chunks: Phaser.GameObjects.Particles.ParticleEmitter;
-  private fullTag: Phaser.GameObjects.Text;
   private dirtTint = 0xffffff;
   private dirtAngle = 270;
   private chunkTint = 0xffffff;
@@ -62,12 +61,6 @@ export class PodView {
         tint: { onEmit: () => this.chunkTint },
       })
       .setDepth(Depth.debris);
-    this.fullTag = scene.add
-      .text(0, 0, 'FULL', { fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#d9480f', padding: { x: 2, y: 1 } })
-      .setOrigin(0.5, 1)
-      .setResolution(4)
-      .setDepth(Depth.debris)
-      .setVisible(false);
   }
 
   // Squash on landing, harder for faster landings (tiles/s).
@@ -85,7 +78,7 @@ export class PodView {
     this.chunks.emitParticleAt(col * TILE + TILE / 2, row * TILE + TILE / 2, 8);
   }
 
-  update(dt: number, dead: boolean, drillColor: number, cargoFull: boolean): void {
+  update(dt: number, dead: boolean, drillColor: number): void {
     const pod = this.pod;
     const cx = pod.x + pod.w / 2;
     const cy = pod.y + pod.h / 2;
@@ -113,10 +106,6 @@ export class PodView {
       .setFlipX(pod.facing < 0)
       .setScale(1 + 0.15 * this.squash, 1 - 0.22 * this.squash)
       .setTint(dead || flashing ? 0xff5050 : 0xffffff);
-
-    // Tag over the pod while the cargo bay is full, bobbing so it catches the eye.
-    this.fullTag.setVisible(cargoFull && alive);
-    if (cargoFull) this.fullTag.setPosition(cx, pod.y - 6 + Math.sin(this.scene.time.now / 150) * 1.5);
 
     if (pod.thrusting && alive) {
       const y = pod.y + pod.h + 1;
