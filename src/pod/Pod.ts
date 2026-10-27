@@ -80,7 +80,7 @@ export class Pod {
     if (this.drill) return this.updateDrill(dt);
 
     this.thrusting = false;
-    if (this.grounded && this.tryStartDrill(stick)) return null;
+    if (this.tryStartDrill(stick)) return null;
 
     if (Math.abs(stick.x) > 0.1) this.facing = stick.x > 0 ? 1 : -1;
     this.updateVelocity(dt, stick, thrustScale);
@@ -113,8 +113,9 @@ export class Pod {
     this.vy = clamp(this.vy, -p.maxRise * TILE, p.maxFall * TILE);
   }
 
+  // Down needs the pod sitting on the tile; sideways works on the ground or hovering against a wall.
   private tryStartDrill(stick: Stick): boolean {
-    if (stick.y > 0.5 && stick.y >= Math.abs(stick.x)) return this.tryDrillDown();
+    if (stick.y > 0.5 && stick.y >= Math.abs(stick.x)) return this.grounded && this.tryDrillDown();
     if (Math.abs(stick.x) > 0.5) {
       const dir = stick.x > 0 ? 1 : -1;
       if (this.blockedDir === dir) return this.tryDrillSide(dir);
@@ -131,10 +132,11 @@ export class Pod {
   }
 
   private tryDrillSide(dir: 1 | -1): boolean {
-    const row = Math.round((this.y + this.h) / TILE) - 1;
+    // The row the pod's centre is in; when hovering, the drill also lines the pod up with it.
+    const row = Math.floor((this.y + this.h / 2) / TILE);
     const col = dir > 0 ? Math.round((this.x + this.w) / TILE) : Math.round(this.x / TILE) - 1;
     if (!isDrillable(this.world.get(col, row))) return false;
-    this.startDrill(col, row, dir > 0 ? 'right' : 'left', col * TILE + (TILE - this.w) / 2, this.y);
+    this.startDrill(col, row, dir > 0 ? 'right' : 'left', col * TILE + (TILE - this.w) / 2, row * TILE + TILE - this.h);
     return true;
   }
 

@@ -21,10 +21,10 @@ export const POD = {
 };
 
 export const PHYSICS = {
-  gravity: 20, // tiles/s²
-  thrust: 34, // tiles/s², upward, applied against gravity
+  gravity: 14, // tiles/s²
+  thrust: 28, // tiles/s², upward, applied against gravity
   maxRise: 8, // tiles/s
-  maxFall: 20, // tiles/s
+  maxFall: 16, // tiles/s
   accel: 28, // tiles/s², horizontal
   maxSpeedX: 6, // tiles/s
   groundFriction: 24, // tiles/s², slowdown with no input on the ground
@@ -49,7 +49,7 @@ export const FUEL = {
 };
 
 export const FALL = {
-  safeSpeed: 9, // tiles/s; landing slower than this does no damage
+  safeSpeed: 8, // tiles/s; landing slower than this does no damage
   damagePerSpeed: 0.8, // hull lost per tile/s above safeSpeed
 };
 
