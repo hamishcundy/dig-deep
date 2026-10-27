@@ -1,3 +1,4 @@
+import { ITEM_SLOTS, ITEMS, type ItemKey } from '../config';
 import { PodStats } from './PodStats';
 
 // Progress lives in this browser's localStorage: the last surface stop, the
@@ -25,6 +26,7 @@ export function loadSave(): SaveData | null {
     stats.hull = o.stats.hull;
     stats.cargo = o.stats.cargo;
     stats.levels = { ...stats.levels, ...o.stats.levels };
+    stats.items = (Array.isArray(o.stats.items) ? o.stats.items : []).filter((k: string): k is ItemKey => k in ITEMS).slice(0, ITEM_SLOTS);
     return { seed: o.seed, cells: fromBase64(o.cells), stats, col: o.col };
   } catch {
     return null;
@@ -32,11 +34,11 @@ export function loadSave(): SaveData | null {
 }
 
 export function writeSave(data: SaveData): void {
-  const { money, fuel, hull, cargo, levels } = data.stats;
+  const { money, fuel, hull, cargo, levels, items } = data.stats;
   try {
     localStorage.setItem(
       KEY,
-      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, fuel, hull, cargo, levels }, col: data.col }),
+      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, fuel, hull, cargo, levels, items }, col: data.col }),
     );
   } catch {
     // storage full or blocked (e.g. private browsing): play on without saving

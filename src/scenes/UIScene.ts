@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { ECONOMY, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type UpgradeKey } from '../config';
+import { ECONOMY, ITEM_SLOTS, ITEMS, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type ItemKey, type UpgradeKey } from '../config';
 import { sound } from '../audio/sound';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
+import { ItemBar } from '../ui/ItemBar';
 import { installOption, onInstallChange, showInstallPrompt } from '../pwa';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
 import type { GameScene } from './GameScene';
@@ -16,6 +17,7 @@ export class UIScene extends Phaser.Scene {
   private hud!: Hud;
   private panel!: Panel;
   private glow!: Phaser.GameObjects.Image;
+  private itemBar!: ItemBar;
 
   constructor() {
     super('ui');
@@ -32,10 +34,12 @@ export class UIScene extends Phaser.Scene {
     this.panel = new Panel(this);
     this.makePauseButton();
     this.makeGlow();
+    this.itemBar = new ItemBar(this, (slot) => this.gameScene.useItem(slot));
 
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => (this.panel.open ? this.panel.cancel() : this.gameScene.pause()));
     kb.on('keydown-P', () => (this.panel.title === PAUSED ? this.panel.cancel() : this.gameScene.pause()));
+    ['ONE', 'TWO', 'THREE'].slice(0, ITEM_SLOTS).forEach((k, slot) => kb.on(`keydown-${k}`, () => this.gameScene.useItem(slot)));
   }
 
   // Top right, under the cash. Mostly for touch; desktop also has Esc and P.
@@ -73,6 +77,7 @@ export class UIScene extends Phaser.Scene {
     const { pod, world, stats, fuelMark, fuelState } = this.gameScene;
     const depth = Math.max(0, pod.row - world.surfaceRow + 1);
     this.hud.update(stats, fuelMark, fuelState, depth * METRES_PER_TILE, time, delta / 1000);
+    this.itemBar.update(stats.items);
     this.glow.setVisible(fuelState === 'critical').setAlpha(0.7 + 0.3 * Math.sin(time / 180));
   }
 
@@ -170,11 +175,25 @@ export class UIScene extends Phaser.Scene {
         const label = q.points < need - 0.05 ? 'Repair some' : 'Repair';
         fix = { label, detail: `$${q.cost}`, onClick: () => (s.repair(), sound.repair(), refresh()) };
       }
+      // Supplies: single-use items for the slots on the item bar.
+      const keys = Object.keys(ITEMS) as ItemKey[];
+      const supplies = keys.map((key): PanelButton => {
+        const price = s.itemPrice(key);
+        const detail = `$${price.toLocaleString()}`;
+        const { name, icon } = ITEMS[key];
+        const disabled = s.itemSlotsFull || price > s.money;
+        return { label: name, detail, icon, disabled, onClick: () => (s.buyItem(key), sound.coin(), refresh()) };
+      });
       this.showPanel({
         title: 'Repair',
-        lines: [['Hull', `${Math.ceil(s.hull)} / ${s.maxHull}`], ['Price', `$${ECONOMY.repairPrice} per point`], ['Cash', `$${s.money.toLocaleString()}`]],
-        buttons: [fix, closeButton],
+        lines: [
+          ['Hull', `${Math.ceil(s.hull)} / ${s.maxHull}`],
+          ['Cash', `$${s.money.toLocaleString()}`],
+          ['Item slots', `${s.items.length} / ${ITEM_SLOTS} used`],
+        ],
+        buttons: [fix, ...supplies, closeButton],
         onCancel: close,
+        plain: fix.disabled, // only highlight (and Enter) the repair itself, never a purchase
       });
     }
   }
@@ -247,6 +266,8 @@ export class UIScene extends Phaser.Scene {
         'buy upgrades at the shop.',
         'Watch your fuel and hull:',
         'refuel and repair up top.',
+        'Buy items at the repair shop;',
+        touch ? 'tap one to use it.' : 'keys 1 to 3 use them.',
         touch ? 'Drag on the left to move.' : 'Move with arrows or WASD.',
       ],
       buttons: [{ label: 'Got it', onClick: back }],

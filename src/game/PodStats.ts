@@ -1,12 +1,13 @@
-import { ECONOMY, ORES, UPGRADE_PRICES, UPGRADES, type UpgradeKey } from '../config';
+import { ECONOMY, ITEM_REFILL_MARKUP, ITEM_SLOTS, ITEMS, ORES, UPGRADE_PRICES, UPGRADES, type ItemKey, type UpgradeKey } from '../config';
 
-// Money, fuel, hull, cargo and upgrade levels, plus the surface services that change them.
+// Money, fuel, hull, cargo, items and upgrade levels, plus the surface services that change them.
 export class PodStats {
   levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0 };
   money = ECONOMY.startMoney;
   fuel = this.value('fuel');
   hull = this.value('hull');
   cargo: number[] = ORES.map(() => 0); // count per ore
+  items: ItemKey[] = []; // one per slot, in the order bought
 
   value(key: UpgradeKey, level = this.levels[key]): number {
     return UPGRADES[key].values[level];
@@ -83,6 +84,24 @@ export class PodStats {
     this.money -= Math.min(cost, this.money);
   }
 
+  itemPrice(key: ItemKey): number {
+    if (key === 'fuel') return Math.ceil(this.fuelCapacity * ECONOMY.fuelPrice * ITEM_REFILL_MARKUP);
+    if (key === 'repair') return Math.ceil(this.maxHull * ECONOMY.repairPrice * ITEM_REFILL_MARKUP);
+    return ITEMS[key].price!;
+  }
+
+  get itemSlotsFull(): boolean {
+    return this.items.length >= ITEM_SLOTS;
+  }
+
+  buyItem(key: ItemKey): boolean {
+    const price = this.itemPrice(key);
+    if (this.itemSlotsFull || price > this.money) return false;
+    this.money -= price;
+    this.items.push(key);
+    return true;
+  }
+
   sellAll(): number {
     const value = this.cargoValue;
     this.money += value;
@@ -97,6 +116,7 @@ export class PodStats {
     copy.fuel = this.fuel;
     copy.hull = this.hull;
     copy.cargo = [...this.cargo];
+    copy.items = [...this.items];
     return copy;
   }
 }

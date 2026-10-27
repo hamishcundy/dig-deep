@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
-import { BUILDINGS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef } from '../config';
+import { BUILDINGS, DYNAMITE_RADIUS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
-import { Pod, type DugTile } from '../pod/Pod';
+import { Pod, type DugTile, type Stick } from '../pod/Pod';
 import { World } from '../world/World';
-import { isOre, oreIndex } from '../world/tiles';
+import { Tile, isDrillable, isOre, isSolid, oreIndex } from '../world/tiles';
 import { Darkness } from './Darkness';
 import { PodView } from './PodView';
 import { Surface } from './Surface';
@@ -44,6 +44,7 @@ export class GameScene extends Phaser.Scene {
   private usedPad: BuildingDef | null = null;
   fuelMark = 0; // litres to get home with a margin; drawn as a tick on the fuel gauge
   fuelState: FuelState = 'ok';
+  private braking = false; // landing thrusters firing
 
   constructor() {
     super('game');
@@ -120,10 +121,13 @@ export class GameScene extends Phaser.Scene {
     // With an empty tank the engine is off: no steering, thrust or new drilling,
     // but the pod keeps its momentum, so it can still coast or fall onto the fuel pad.
     const hadFuel = stats.fuel > 0;
-    const dug = pod.update(dt, hadFuel ? this.controls.read() : NO_INPUT, power);
+    const stick = hadFuel ? this.controls.read() : NO_INPUT;
+    this.updateLandingThrusters(dt, stick, power.thrust);
+    const dug = pod.update(dt, stick, power);
     if (dug) this.onDug(dug);
 
     stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
+    if (this.braking) pod.thrusting = true; // show the flame; the thrusters burn their own fuel
     if (hadFuel && stats.fuel === 0) {
       this.ui.toast('Out of fuel!', 0xff3b3b, 2000);
       sound.sputter();
@@ -190,6 +194,112 @@ export class GameScene extends Phaser.Scene {
     const drive = Math.abs(pod.col - (pad.col + pad.width / 2));
     const driveTime = drive / (PHYSICS.maxSpeedX * stats.enginePower);
     return climbTime * (FUEL.idle + FUEL.thrust) + driveTime * FUEL.idle;
+  }
+
+  // Landing thrusters fire by themselves when the pod is falling too fast to land
+  // safely and the ground is close enough that braking has to start now. They
+  // brake at full thrust, without using the tank, until the fall is safe.
+  private updateLandingThrusters(dt: number, stick: Stick, thrust: number): void {
+    const { pod, stats } = this;
+    const fall = pod.vy / TILE; // tiles/s, down is positive
+    const target = FALL.safeSpeed * 0.6;
+    if (this.braking) {
+      if (pod.grounded || fall <= target) this.braking = false;
+      else pod.vy -= PHYSICS.thrust * TILE * dt;
+      return;
+    }
+    const slot = stats.items.indexOf('thrusters');
+    if (slot < 0 || fall <= FALL.safeSpeed || pod.drill) return;
+    // Distance needed to slow from `fall` to `target`, plus a little for frame steps.
+    const stopping = (decel: number) => (fall * fall - target * target) / (2 * decel) + fall * dt * 2 + 0.2;
+    const gap = this.groundGap();
+    if (gap > stopping(PHYSICS.thrust - PHYSICS.gravity)) return;
+    // Leave it to the player if their own thrust is already enough.
+    const own = PHYSICS.thrust * thrust - PHYSICS.gravity;
+    if (stick.y < -0.3 && stats.fuel > 0 && own > 0 && gap > stopping(own)) return;
+    stats.items.splice(slot, 1);
+    this.braking = true;
+    this.ui.toast('Landing thrusters fired', 0xffc531);
+    sound.thrusters();
+  }
+
+  // Tiles of open space between the bottom of the pod and the ground below it.
+  private groundGap(): number {
+    const { pod, world } = this;
+    const bottom = pod.y + pod.h;
+    const c0 = Math.floor(pod.x / TILE);
+    const c1 = Math.floor((pod.x + pod.w - 1) / TILE);
+    for (let row = Math.floor(bottom / TILE); row < world.rows; row++) {
+      for (let c = c0; c <= c1; c++) if (isSolid(world.get(c, row))) return Math.max(0, (row * TILE - bottom) / TILE);
+    }
+    return Infinity;
+  }
+
+  // Use the item in a slot (from the item bar or keys 1-3). An item that can't do
+  // anything right now is kept.
+  useItem(slot: number): void {
+    const key = this.stats.items[slot];
+    if (this.mode !== 'play' || !key) return;
+    if (this.applyItem(key)) this.stats.items.splice(slot, 1);
+  }
+
+  private applyItem(key: ItemKey): boolean {
+    const { stats, pod, world } = this;
+    switch (key) {
+      case 'fuel':
+        if (stats.fuel >= stats.fuelCapacity - 0.05) return this.refuse('Tank is full');
+        stats.fuel = stats.fuelCapacity;
+        sound.fill();
+        return true;
+      case 'repair':
+        if (stats.hull >= stats.maxHull - 0.05) return this.refuse('Hull is fine');
+        stats.hull = stats.maxHull;
+        sound.repair();
+        return true;
+      case 'dynamite':
+        this.blast();
+        return true;
+      case 'teleport':
+        if (pod.row < world.surfaceRow) return this.refuse('Already at the surface');
+        this.teleportHome();
+        return true;
+      case 'thrusters':
+        return false; // they fire by themselves
+    }
+  }
+
+  private refuse(message: string): false {
+    this.ui.toast(message, 0xff8a3b);
+    sound.nope();
+    return false;
+  }
+
+  // Clears the tiles around the pod, rocks included; ore caught in it is lost.
+  // Bedrock and building pads survive.
+  private blast(): void {
+    const { pod, world } = this;
+    for (let row = pod.row - DYNAMITE_RADIUS; row <= pod.row + DYNAMITE_RADIUS; row++) {
+      for (let col = pod.col - DYNAMITE_RADIUS; col <= pod.col + DYNAMITE_RADIUS; col++) {
+        const tile = world.get(col, row);
+        if (!isDrillable(tile) && tile !== Tile.Boulder) continue;
+        this.podView.burst(col, row, this.terrain.colorAt(col, row, tile));
+        world.set(col, row, Tile.Empty);
+        this.terrain.dug(col, row);
+      }
+    }
+    pod.drill = null; // whatever it was drilling is gone
+    pod.grounded = false;
+    this.cameras.main.shake(300, 0.012);
+    sound.boom();
+  }
+
+  // Back to the start point on the surface, with cargo and everything else kept.
+  private teleportHome(): void {
+    this.pod.placeAt(SPAWN_COL, this.world.surfaceRow - 1);
+    this.pod.drill = null;
+    this.braking = false;
+    this.cameras.main.flash(300, 170, 140, 255);
+    sound.teleport();
   }
 
   private thrustPower(): number {

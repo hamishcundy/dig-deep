@@ -48,6 +48,7 @@ export class Joystick {
 
   private onDown(p: Phaser.Input.Pointer): void {
     if (!this.enabled || this.pointerId !== null || p.x > this.scene.scale.width * ZONE_WIDTH) return;
+    if (this.scene.input.hitTestPointer(p).length > 0) return; // a button (e.g. an item slot on a narrow screen)
     this.pointerId = p.id;
     this.baseX = p.x;
     this.baseY = p.y;

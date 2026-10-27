@@ -241,6 +241,27 @@ class Sound {
     this.tone(90, 0.5, { type: 'sawtooth', gain: 0.15, to: 40 });
   }
 
+  // Dynamite.
+  boom(): void {
+    if (!this.ready) return;
+    this.noise(0.7, { filter: 'lowpass', freq: 1400, to: 90, gain: 1 });
+    this.tone(80, 0.5, { type: 'sine', gain: 0.6, to: 30 });
+  }
+
+  // Teleport: a rising shimmer.
+  teleport(): void {
+    if (!this.ready) return;
+    this.tone(300, 0.45, { type: 'sine', gain: 0.25, to: 1500 });
+    this.tone(600, 0.4, { type: 'triangle', gain: 0.12, to: 2400, at: 0.05 });
+  }
+
+  // Landing thrusters firing.
+  thrusters(): void {
+    if (!this.ready) return;
+    this.noise(0.35, { filter: 'bandpass', freq: 600, gain: 0.6 });
+    this.tone(120, 0.3, { type: 'sawtooth', gain: 0.15, to: 80 });
+  }
+
   // The pod is lost.
   crash(): void {
     if (!this.ready) return;

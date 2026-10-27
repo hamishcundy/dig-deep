@@ -5,6 +5,7 @@ import { textStyle } from './theme';
 export interface PanelButton {
   label: string;
   detail?: string; // right-aligned, e.g. a price
+  icon?: string; // texture key, drawn left of the label
   onClick?: () => void;
   disabled?: boolean;
 }
@@ -82,11 +83,13 @@ export class Panel {
       const rect = s.add.rectangle(PAD, y, pw - PAD * 2, BUTTON_H, fill).setOrigin(0);
       const color = b.disabled ? '#7a8394' : '#ffffff';
       // With a detail the label sits left and the detail right; otherwise the label is centred.
+      const labelX = b.icon ? PAD * 2 + 30 : PAD * 2;
       const text = b.detail
-        ? s.add.text(PAD * 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0, 0.5)
+        ? s.add.text(labelX, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0, 0.5)
         : s.add.text(pw / 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0.5);
       if (!b.disabled && b.onClick) rect.setInteractive({ useHandCursor: true }).on('pointerup', () => press(b.onClick!));
       content.push(rect, text);
+      if (b.icon) content.push(s.add.image(PAD * 2 + 12, y + BUTTON_H / 2, b.icon).setScale(1.5).setAlpha(b.disabled ? 0.4 : 1));
       if (b.detail) content.push(s.add.text(pw - PAD * 2, y + BUTTON_H / 2, b.detail, textStyle(26, color)).setOrigin(1, 0.5));
       y += BUTTON_H + GAP;
     }

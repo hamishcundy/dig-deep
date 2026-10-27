@@ -84,6 +84,25 @@ export const ECONOMY = {
   repairPrice: 10, // $ per hull point
 };
 
+// Single-use items, bought at the repair shop and carried in a few slots.
+export type ItemKey = 'fuel' | 'repair' | 'dynamite' | 'teleport' | 'thrusters';
+export interface ItemDef {
+  name: string;
+  icon: string; // texture key
+  price?: number; // fixed price; refills are priced from the pod's tank or hull instead
+  auto?: boolean; // used by itself rather than by the player
+}
+export const ITEMS: Record<ItemKey, ItemDef> = {
+  fuel: { name: 'Reserve fuel', icon: 'icon-fuel' }, // fills the tank
+  repair: { name: 'Repair kit', icon: 'item-repair' }, // restores the hull
+  dynamite: { name: 'Dynamite', icon: 'item-dynamite', price: 250 }, // clears the tiles around the pod
+  teleport: { name: 'Teleport', icon: 'item-teleport', price: 1500 }, // back to the surface
+  thrusters: { name: 'Landing thrusters', icon: 'item-thrusters', price: 120, auto: true }, // brakes one hard landing
+};
+export const ITEM_SLOTS = 3;
+export const ITEM_REFILL_MARKUP = 5; // a refill costs this many times a full fill or repair at the surface
+export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
+
 export type BuildingKind = 'fuel' | 'sell' | 'repair' | 'shop';
 
 export interface BuildingDef {
