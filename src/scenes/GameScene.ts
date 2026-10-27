@@ -90,7 +90,7 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(delta / 1000, 0.05);
     if (this.mode === 'play') this.step(dt);
     const d = this.pod.drill;
-    this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
+    this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0, this.stats.cargoFull);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
   }
 
@@ -147,8 +147,9 @@ export class GameScene extends Phaser.Scene {
       this.ui.toast(`Cargo full: ${ore.name} lost`, 0xff6b6b);
     } else {
       this.stats.cargo[i]++;
-      this.ui.toast(`+${ore.name}`, ore.color);
       this.ui.oreCollected(i, (dug.col + 0.5) * TILE, (dug.row + 0.5) * TILE);
+      if (this.stats.cargoFull) this.ui.toast('Cargo full: sell at the surface', 0xff8a3b, 2000);
+      else this.ui.toast(`+${ore.name}`, ore.color);
     }
   }
 

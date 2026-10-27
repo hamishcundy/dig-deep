@@ -52,8 +52,12 @@ export class Hud {
     this.fuel.set(fuelShare, flash ? 0xff3b3b : low ? 0xff8a3b : 0xffc531);
     const hullShare = stats.hull / stats.maxHull;
     this.hull.set(hullShare, hullShare < 0.3 ? 0xff3b3b : 0x4ade80);
-    this.cargo.setText(`Cargo ${stats.cargoCount}/${stats.cargoCapacity}`);
-    this.cargo.setColor(stats.cargoFull ? '#ff8a3b' : '#ffffff');
+    // Full bay: a flashing badge. Nearly full: amber.
+    const full = stats.cargoFull;
+    const blink = full && Math.floor(time / 400) % 2 === 0;
+    this.cargo.setText(full ? ' CARGO FULL ' : `Cargo ${stats.cargoCount}/${stats.cargoCapacity}`);
+    this.cargo.setBackgroundColor(blink ? '#d9480f' : 'rgba(0,0,0,0)');
+    this.cargo.setColor(full ? '#ffffff' : stats.cargoCount >= stats.cargoCapacity * 0.8 ? '#ffc531' : '#ffffff');
     this.depth.setText(`Depth ${depthMetres} m`);
     this.updateMoney(stats.money, dt);
   }
@@ -86,7 +90,8 @@ export class Hud {
     });
   }
 
-  toast(message: string, color = 0xffffff): void {
+  // hold: ms the message stays fully visible before fading.
+  toast(message: string, color = 0xffffff, hold = 600): void {
     if (this.toastText) {
       this.scene.tweens.killTweensOf(this.toastText);
       this.toastText.destroy();
@@ -97,6 +102,6 @@ export class Hud {
       .setStroke('#000000', 5)
       .setOrigin(0.5);
     this.toastText = text;
-    this.scene.tweens.add({ targets: text, y: 90, alpha: 0, delay: 600, duration: 700, onComplete: () => text.destroy() });
+    this.scene.tweens.add({ targets: text, y: 90, alpha: 0, delay: hold, duration: 700, onComplete: () => text.destroy() });
   }
 }

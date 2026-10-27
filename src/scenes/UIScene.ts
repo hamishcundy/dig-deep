@@ -32,8 +32,8 @@ export class UIScene extends Phaser.Scene {
     this.hud.update(stats, depth * METRES_PER_TILE, time, delta / 1000);
   }
 
-  toast(message: string, color?: number): void {
-    this.hud.toast(message, color);
+  toast(message: string, color?: number, hold?: number): void {
+    this.hud.toast(message, color, hold);
   }
 
   // World position (px) of a just-collected ore, for the fly-to-cargo effect.
