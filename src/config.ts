@@ -38,7 +38,7 @@ export const PHYSICS = {
 export const STATS = {
   fuelCapacity: 10, // litres
   maxHull: 10,
-  cargoCapacity: 7, // items
+  cargoCapacity: 10, // items
 };
 
 export const FUEL = {
