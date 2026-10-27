@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ITEM_SLOTS, ITEMS, type ItemKey } from '../config';
+import { ITEMS, MAX_ITEM_SLOTS, type ItemKey } from '../config';
 import { textStyle } from './theme';
 
 const SIZE = 52;
@@ -13,16 +13,18 @@ interface Slot {
 }
 
 // The item slots at the bottom right, clear of the joystick on the left.
-// Tap a slot to use its item; items that work by themselves are marked AUTO.
+// Shows the slots the pod has (more come with the Item slots upgrade). Tap a
+// slot to use its item; items that work by themselves are marked AUTO.
 export class ItemBar {
   private slots: Slot[] = [];
   private shown = '';
+  private count = 0; // slots shown
 
   constructor(
     private scene: Phaser.Scene,
     onUse: (slot: number) => void,
   ) {
-    for (let i = 0; i < ITEM_SLOTS; i++) {
+    for (let i = 0; i < MAX_ITEM_SLOTS; i++) {
       const bg = scene.add.rectangle(0, 0, SIZE, SIZE, 0x000000, 0.5).setStrokeStyle(1, 0xffffff, 0.4);
       bg.setInteractive({ useHandCursor: true }).on('pointerup', () => onUse(i));
       const icon = scene.add.image(0, 0, '__DEFAULT').setScale(2);
@@ -36,7 +38,7 @@ export class ItemBar {
   private layout(): void {
     const { width, height } = this.scene.scale;
     this.slots.forEach(({ bg, icon, auto }, i) => {
-      const x = width - MARGIN - SIZE / 2 - (ITEM_SLOTS - 1 - i) * (SIZE + GAP);
+      const x = width - MARGIN - SIZE / 2 - (this.count - 1 - i) * (SIZE + GAP);
       const y = height - MARGIN - SIZE / 2;
       bg.setPosition(x, y);
       icon.setPosition(x, y + 2);
@@ -45,12 +47,18 @@ export class ItemBar {
     this.shown = ''; // redo the per-item icon offsets at the new position
   }
 
-  update(items: readonly ItemKey[]): void {
-    const key = items.join();
+  update(items: readonly ItemKey[], slots: number): void {
+    const count = Math.max(slots, items.length);
+    const key = `${count}:${items.join()}`;
     if (key === this.shown) return;
+    if (count !== this.count) {
+      this.count = count;
+      this.layout(); // clears `shown`
+    }
     this.shown = key;
     this.slots.forEach(({ bg, icon, auto }, i) => {
       const item = items[i];
+      bg.setVisible(i < count);
       bg.setFillStyle(0x000000, item ? 0.5 : 0.2).setStrokeStyle(1, 0xffffff, item ? 0.4 : 0.15);
       icon.setVisible(!!item);
       if (item) icon.setTexture(ITEMS[item].icon);

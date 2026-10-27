@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ECONOMY, ITEM_SLOTS, ITEMS, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type ItemKey, type UpgradeKey } from '../config';
+import { ECONOMY, ITEMS, MAX_ITEM_SLOTS, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type ItemKey, type UpgradeKey } from '../config';
 import { sound } from '../audio/sound';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
@@ -39,7 +39,7 @@ export class UIScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => (this.panel.open ? this.panel.cancel() : this.gameScene.pause()));
     kb.on('keydown-P', () => (this.panel.title === PAUSED ? this.panel.cancel() : this.gameScene.pause()));
-    ['ONE', 'TWO', 'THREE'].slice(0, ITEM_SLOTS).forEach((k, slot) => kb.on(`keydown-${k}`, () => this.gameScene.useItem(slot)));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].slice(0, MAX_ITEM_SLOTS).forEach((k, slot) => kb.on(`keydown-${k}`, () => this.gameScene.useItem(slot)));
   }
 
   // Top right, under the cash. Mostly for touch; desktop also has Esc and P.
@@ -77,7 +77,7 @@ export class UIScene extends Phaser.Scene {
     const { pod, world, stats, fuelMark, fuelState } = this.gameScene;
     const depth = Math.max(0, pod.row - world.surfaceRow + 1);
     this.hud.update(stats, fuelMark, fuelState, depth * METRES_PER_TILE, time, delta / 1000);
-    this.itemBar.update(stats.items);
+    this.itemBar.update(stats.items, stats.itemSlots);
     this.glow.setVisible(fuelState === 'critical').setAlpha(0.7 + 0.3 * Math.sin(time / 180));
   }
 
@@ -189,7 +189,7 @@ export class UIScene extends Phaser.Scene {
         lines: [
           ['Hull', `${Math.ceil(s.hull)} / ${s.maxHull}`],
           ['Cash', `$${s.money.toLocaleString()}`],
-          ['Item slots', `${s.items.length} / ${ITEM_SLOTS} used`],
+          ['Item slots', `${s.items.length} / ${s.itemSlots} used`],
         ],
         buttons: [fix, ...supplies, closeButton],
         onCancel: close,
@@ -267,7 +267,7 @@ export class UIScene extends Phaser.Scene {
         'Watch your fuel and hull:',
         'refuel and repair up top.',
         'Buy items at the repair shop;',
-        touch ? 'tap one to use it.' : 'keys 1 to 3 use them.',
+        touch ? 'tap one to use it.' : 'number keys use them.',
         touch ? 'Drag on the left to move.' : 'Move with arrows or WASD.',
       ],
       buttons: [{ label: 'Got it', onClick: back }],

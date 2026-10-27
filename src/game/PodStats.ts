@@ -1,8 +1,8 @@
-import { ECONOMY, ITEM_REFILL_MARKUP, ITEM_SLOTS, ITEMS, ORES, UPGRADE_PRICES, UPGRADES, type ItemKey, type UpgradeKey } from '../config';
+import { ECONOMY, ITEM_REFILL_MARKUP, ITEMS, ORES, UPGRADE_PRICES, UPGRADES, type ItemKey, type UpgradeKey } from '../config';
 
 // Money, fuel, hull, cargo, items and upgrade levels, plus the surface services that change them.
 export class PodStats {
-  levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0 };
+  levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0, slots: 0 };
   money = ECONOMY.startMoney;
   fuel = this.value('fuel');
   hull = this.value('hull');
@@ -90,8 +90,13 @@ export class PodStats {
     return ITEMS[key].price!;
   }
 
+  get itemSlots(): number {
+    return this.value('slots');
+  }
+
+  // An older save can hold more items than slots; they stay until used.
   get itemSlotsFull(): boolean {
-    return this.items.length >= ITEM_SLOTS;
+    return this.items.length >= this.itemSlots;
   }
 
   buyItem(key: ItemKey): boolean {

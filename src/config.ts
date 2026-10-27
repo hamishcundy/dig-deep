@@ -43,7 +43,7 @@ export const PHYSICS = {
   fullCargoThrustPenalty: 0.3, // thrust lost with a full cargo bay (0.3 = 30%), scaled by how full it is
 };
 
-export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo';
+export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo' | 'slots';
 
 export interface UpgradeDef {
   name: string;
@@ -59,7 +59,8 @@ export const UPGRADES: Record<UpgradeKey, UpgradeDef> = {
   hull: { name: 'Hull', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // max hull
   engine: { name: 'Engine', values: [1, 1.12, 1.25, 1.4, 1.55], format: (v) => `${Math.round(v * 100)}%` }, // thrust and top speed
   fuel: { name: 'Fuel', values: [10, 15, 22, 32, 45], format: (v) => `${v}L` }, // tank litres
-  cargo: { name: 'Cargo', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // items
+  cargo: { name: 'Cargo', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // ore
+  slots: { name: 'Item slots', values: [1, 2, 3, 4, 5], format: (v) => `${v}` }, // items carried
 };
 
 export const FUEL = {
@@ -76,6 +77,9 @@ export const FUEL = {
 export const FALL = {
   safeSpeed: 8, // tiles/s; landing slower than this does no damage
   damagePerSpeed: 0.8, // hull lost per tile/s above safeSpeed
+  // Landing thrusters only fire for landings at least this fast (about a 7-tile drop),
+  // so they're saved for the bottom of a long shaft rather than small hops.
+  thrusterMinImpact: 13.5, // tiles/s
 };
 
 export const ECONOMY = {
@@ -99,7 +103,7 @@ export const ITEMS: Record<ItemKey, ItemDef> = {
   teleport: { name: 'Teleport', icon: 'item-teleport', price: 1500 }, // back to the surface
   thrusters: { name: 'Landing thrusters', icon: 'item-thrusters', price: 120, auto: true }, // brakes one hard landing
 };
-export const ITEM_SLOTS = 3;
+export const MAX_ITEM_SLOTS = UPGRADES.slots.values[UPGRADES.slots.values.length - 1];
 export const ITEM_REFILL_MARKUP = 5; // a refill costs this many times a full fill or repair at the surface
 export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
 

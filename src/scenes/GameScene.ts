@@ -196,8 +196,8 @@ export class GameScene extends Phaser.Scene {
     return climbTime * (FUEL.idle + FUEL.thrust) + driveTime * FUEL.idle;
   }
 
-  // Landing thrusters fire by themselves when the pod is falling too fast to land
-  // safely and the ground is close enough that braking has to start now. They
+  // Landing thrusters fire by themselves on a big drop: when the pod would hit the
+  // ground at FALL.thrusterMinImpact or more and braking has to start now. They
   // brake at full thrust, without using the tank, until the fall is safe.
   private updateLandingThrusters(dt: number, stick: Stick, thrust: number): void {
     const { pod, stats } = this;
@@ -214,6 +214,8 @@ export class GameScene extends Phaser.Scene {
     const stopping = (decel: number) => (fall * fall - target * target) / (2 * decel) + fall * dt * 2 + 0.2;
     const gap = this.groundGap();
     if (gap > stopping(PHYSICS.thrust - PHYSICS.gravity)) return;
+    const impact = Math.min(PHYSICS.maxFall, Math.sqrt(fall * fall + 2 * PHYSICS.gravity * gap));
+    if (impact < FALL.thrusterMinImpact) return; // a small hop: not worth a thruster
     // Leave it to the player if their own thrust is already enough.
     const own = PHYSICS.thrust * thrust - PHYSICS.gravity;
     if (stick.y < -0.3 && stats.fuel > 0 && own > 0 && gap > stopping(own)) return;
@@ -223,7 +225,8 @@ export class GameScene extends Phaser.Scene {
     sound.thrusters();
   }
 
-  // Tiles of open space between the bottom of the pod and the ground below it.
+  // Tiles of open space between the bottom of the pod and the ground below it,
+  // across its full width: the pod lands on any ledge it overlaps, even by a pixel.
   private groundGap(): number {
     const { pod, world } = this;
     const bottom = pod.y + pod.h;
