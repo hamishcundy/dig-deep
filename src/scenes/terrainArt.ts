@@ -15,10 +15,10 @@ export const Frame = {
   topsoil: (v: number) => 2 * NB * VARIANTS + v,
   bedrock: (v: number) => 2 * NB * VARIANTS + VARIANTS + v,
   pad: () => 2 * NB * VARIANTS + 2 * VARIANTS,
-  ore: (i: number, v: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 1 + i * 2 + (v % 2),
-  boulder: (v: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 1 + ORES.length * 2 + (v % 2),
+  ore: (i: number, v: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 1 + i * VARIANTS + v,
+  boulder: (v: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 1 + ORES.length * VARIANTS + (v % 2),
   // mask bits: 1 top, 2 right, 4 bottom, 8 left are open
-  edge: (band: number, mask: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 3 + ORES.length * 2 + band * 16 + mask,
+  edge: (band: number, mask: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 3 + ORES.length * VARIANTS + band * 16 + mask,
 };
 
 const FRAME_COUNT = Frame.edge(NB - 1, 15) + 1;
@@ -51,9 +51,9 @@ export function makeTerrainTexture(scene: Phaser.Scene): void {
   }
   drawPad(ctx, ...at(Frame.pad()));
   ORES.forEach((ore, i) => {
-    for (let v = 0; v < 2; v++) {
+    for (let v = 0; v < VARIANTS; v++) {
       const [x, y] = at(Frame.ore(i, v));
-      (GEMS.has(ore.name) ? drawGems : drawNuggets)(ctx, x, y, ore.color, mulberry32(1200 + i * 10 + v));
+      drawOre(ctx, x, y, ore.color, GEMS.has(ore.name), mulberry32(1200 + i * 10 + v));
     }
     const [x, y] = at(Frame.ore(i, 0));
     tex.add(`ore${i}`, 0, x, y, TILE, TILE); // for HUD icons
@@ -231,52 +231,102 @@ function drawPad(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.restore();
 }
 
-function drawNuggets(ctx: CanvasRenderingContext2D, x: number, y: number, color: number, rand: () => number) {
-  for (let i = 0; i < 4; i++) {
-    const nx = x + 4 + Math.floor(rand() * 20);
-    const ny = y + 4 + Math.floor(rand() * 20);
-    const w = 5 + Math.floor(rand() * 3);
-    const h = 4 + Math.floor(rand() * 3);
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(nx - 1, ny - 1, w + 2, h + 2);
-    ctx.fillStyle = css(mix(color, 0x000000, 0.35));
-    ctx.fillRect(nx, ny, w, h);
-    ctx.fillStyle = css(color);
-    ctx.fillRect(nx, ny, w - 1, h - 1);
-    ctx.fillStyle = css(mix(color, 0xffffff, 0.6));
-    ctx.fillRect(nx + 1, ny + 1, 2, 1);
+// Ore spots spread evenly over the tile: a 3x3 grid of cells, most of which
+// get one spot placed at random inside it, so spots never overlap or clump.
+function drawOre(ctx: CanvasRenderingContext2D, x: number, y: number, color: number, gem: boolean, rand: () => number) {
+  const cells = Array.from({ length: 9 }, (_, i) => i);
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  const count = gem ? 4 + Math.floor(rand() * 2) : 6 + Math.floor(rand() * 2);
+  const cs = TILE / 3;
+  for (const cell of cells.slice(0, count)) {
+    const r = gem ? 3.8 + rand() * 0.7 : 3 + rand() * 1.2;
+    const room = Math.max(0, cs - 2 * r - 2);
+    const cx = (cell % 3) * cs + r + 1 + rand() * room;
+    const cy = Math.floor(cell / 3) * cs + r + 1 + rand() * room;
+    if (gem) drawCrystal(ctx, x, y, cx, cy, r, color, rand);
+    else drawNugget(ctx, x, y, cx, cy, r, color, rand);
   }
 }
 
-function drawGems(ctx: CanvasRenderingContext2D, x: number, y: number, color: number, rand: () => number) {
-  for (let i = 0; i < 3; i++) {
-    const cx = x + 7 + Math.floor(rand() * 18);
-    const cy = y + 7 + Math.floor(rand() * 18);
-    const r = 4 + Math.floor(rand() * 2);
-    const diamond = (rr: number) => {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - rr);
-      ctx.lineTo(cx + rr, cy);
-      ctx.lineTo(cx, cy + rr);
-      ctx.lineTo(cx - rr, cy);
-      ctx.closePath();
-      ctx.fill();
-    };
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    diamond(r + 1);
-    ctx.fillStyle = css(mix(color, 0x000000, 0.3));
-    diamond(r);
-    ctx.fillStyle = css(color);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - r);
-    ctx.lineTo(cx + r, cy);
-    ctx.lineTo(cx, cy);
-    ctx.lineTo(cx - r, cy);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = css(mix(color, 0xffffff, 0.7));
-    ctx.fillRect(cx - 1, cy - r + 2, 2, 2);
+// Rasterise a shape into crisp pixels: fill(dx, dy) says if a pixel centre is inside,
+// paint(dx, dy, edge) picks its colour (edge = on the outline).
+function pixelShape(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  cx: number,
+  cy: number,
+  r: number,
+  inside: (dx: number, dy: number) => boolean,
+  paint: (dx: number, dy: number, edge: boolean) => string,
+) {
+  const x0 = Math.floor(cx - r - 1);
+  const y0 = Math.floor(cy - r - 1);
+  const x1 = Math.ceil(cx + r + 1);
+  const y1 = Math.ceil(cy + r + 1);
+  const test = (px: number, py: number) => inside(px + 0.5 - cx, py + 0.5 - cy);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; // drop shadow, down and right
+  for (let py = y0; py <= y1; py++) {
+    for (let px = x0; px <= x1; px++) {
+      if (!test(px, py) && test(px - 1, py - 1)) ctx.fillRect(ox + px, oy + py, 1, 1);
+    }
   }
+  for (let py = y0; py <= y1; py++) {
+    for (let px = x0; px <= x1; px++) {
+      if (!test(px, py)) continue;
+      const edge = !test(px - 1, py) || !test(px + 1, py) || !test(px, py - 1) || !test(px, py + 1);
+      ctx.fillStyle = paint(px + 0.5 - cx, py + 0.5 - cy, edge);
+      ctx.fillRect(ox + px, oy + py, 1, 1);
+    }
+  }
+}
+
+// Rounded, lumpy metal nugget lit from the top left.
+function drawNugget(ctx: CanvasRenderingContext2D, ox: number, oy: number, cx: number, cy: number, r: number, color: number, rand: () => number) {
+  const k = 2 + Math.floor(rand() * 2);
+  const phase = rand() * Math.PI * 2;
+  const squash = 0.8 + rand() * 0.2;
+  const inside = (dx: number, dy: number) => {
+    const a = Math.atan2(dy, dx);
+    const edge = r * (1 + 0.1 * Math.sin(k * a + phase));
+    return Math.hypot(dx, dy / squash) <= edge;
+  };
+  const outline = css(mix(color, 0x000000, 0.55));
+  const shadow = css(mix(color, 0x000000, 0.25));
+  const base = css(color);
+  const light = css(mix(color, 0xffffff, 0.45));
+  let spec = false;
+  pixelShape(ctx, ox, oy, cx, cy, r, inside, (dx, dy, edge) => {
+    if (edge) return outline;
+    // light falls on a small crescent at the top left, shade on the lower right
+    const lit = -(dx * 0.7 + dy) / r;
+    if (lit > 0.6 && !spec) {
+      spec = true;
+      return '#ffffff';
+    }
+    if (lit > 0.45) return light;
+    if (lit < -0.5) return shadow;
+    return base;
+  });
+}
+
+// Faceted crystal: a tall diamond, light facet on the left, dark on the right.
+function drawCrystal(ctx: CanvasRenderingContext2D, ox: number, oy: number, cx: number, cy: number, r: number, color: number, rand: () => number) {
+  const wide = 0.7 + rand() * 0.15;
+  const inside = (dx: number, dy: number) => Math.abs(dx) / (r * wide) + Math.abs(dy) / r <= 1;
+  const outline = css(mix(color, 0x000000, 0.55));
+  const dark = css(mix(color, 0x000000, 0.25));
+  const base = css(color);
+  const light = css(mix(color, 0xffffff, 0.5));
+  pixelShape(ctx, ox, oy, cx, cy, r, inside, (dx, dy, edge) => {
+    if (edge) return outline;
+    if (dy < -r * 0.35 && Math.abs(dx) < 1) return '#ffffff';
+    if (dx < 0) return dy < 0 ? light : base;
+    return dy < 0 ? base : dark;
+  });
 }
 
 function drawBoulder(ctx: CanvasRenderingContext2D, x: number, y: number, rand: () => number) {
