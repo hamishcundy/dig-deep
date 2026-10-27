@@ -20,7 +20,7 @@ const BUTTON_H = 48;
 const GAP = 10;
 
 // Centred modal with a title, text lines and big tappable buttons.
-// Enter presses the first enabled button; Esc calls onCancel.
+// Enter presses the first enabled button; cancel() (Esc, wired by the scene) calls onCancel.
 export class Panel {
   private root: Phaser.GameObjects.Container | null = null;
   private spec: PanelSpec | null = null;
@@ -28,12 +28,19 @@ export class Panel {
   constructor(private scene: Phaser.Scene) {
     scene.scale.on('resize', () => this.spec && this.show(this.spec));
     const kb = scene.input.keyboard!;
-    kb.on('keydown-ESC', () => this.spec?.onCancel?.());
     kb.on('keydown-ENTER', () => !this.spec?.plain && this.spec?.buttons.find((b) => !b.disabled)?.onClick?.());
   }
 
   get open(): boolean {
     return this.spec !== null;
+  }
+
+  get title(): string | null {
+    return this.spec?.title ?? null;
+  }
+
+  cancel(): void {
+    this.spec?.onCancel?.();
   }
 
   show(spec: PanelSpec): void {

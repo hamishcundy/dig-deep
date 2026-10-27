@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { BANDS, ORES, TILE } from '../config';
 import { World } from '../world/World';
 import { isOre, oreIndex, Tile } from '../world/tiles';
-import { Frame, VARIANTS } from './terrainArt';
+import { BLEND_LEVELS, Frame, VARIANTS } from './terrainArt';
+
+const TRANSITION = 10; // rows over which one ground layer blends into the next
 
 type Layer = Phaser.Tilemaps.TilemapLayer;
 
@@ -13,7 +15,8 @@ export class Terrain {
   private ground: Layer;
   private features: Layer;
   private edges: Layer;
-  private bands: Uint8Array;
+  private layer: Uint8Array; // ground layer (the upper one, when blending)
+  private mixLevel: Uint8Array; // 0 = pure layer, 1..BLEND_LEVELS = blending into the next layer down
   private variants: Uint8Array;
 
   private sparkleClock = 0;
@@ -28,17 +31,29 @@ export class Terrain {
     this.features = layer('features');
     this.edges = layer('edges');
 
-    // Band and look variant per cell. The band boundary is jittered so layers meet raggedly.
-    this.bands = new Uint8Array(cols * rows);
+    // Layer, blend and look variant per cell. Around each layer boundary the
+    // ground blends over TRANSITION rows; the boundary waves and is jittered.
+    this.layer = new Uint8Array(cols * rows);
+    this.mixLevel = new Uint8Array(cols * rows);
     this.variants = new Uint8Array(cols * rows);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
         const h = hash(c, r, world.seed);
-        const depth = world.depthOf(r) + ((h >>> 8) % 7) - 3;
-        let band = 0;
-        while (band + 1 < BANDS.length && depth >= BANDS[band + 1].from) band++;
-        this.bands[r * cols + c] = band;
-        this.variants[r * cols + c] = h % VARIANTS;
+        const depth = world.depthOf(r) + 2 * Math.sin(c * 0.37 + (world.seed % 7)) + (((h >>> 8) % 5) - 2) * 0.6;
+        let band = 0; // deepest layer whose transition zone has started
+        while (band + 1 < BANDS.length && depth >= BANDS[band + 1].from - TRANSITION / 2) band++;
+        this.layer[i] = band;
+        if (band > 0) {
+          // 0 = still all the layer above, BLEND_LEVELS + 1 = all this layer
+          const t = (depth - (BANDS[band].from - TRANSITION / 2)) / TRANSITION;
+          const step = Math.round(Math.min(1, t) * (BLEND_LEVELS + 1));
+          if (step <= BLEND_LEVELS) {
+            this.layer[i] = band - 1;
+            this.mixLevel[i] = step;
+          }
+        }
+        this.variants[i] = h % VARIANTS;
       }
     }
     this.redrawAll();
@@ -48,6 +63,11 @@ export class Terrain {
     for (let r = 0; r < this.world.rows; r++) {
       for (let c = 0; c < this.world.cols; c++) this.drawCell(c, r);
     }
+  }
+
+  // The layer a cell mostly looks like, for edges and particle colour.
+  private nearest(i: number): number {
+    return this.layer[i] + (this.mixLevel[i] > BLEND_LEVELS / 2 ? 1 : 0);
   }
 
   // After a tile is dug: redraw it and the edges of its neighbours.
@@ -83,26 +103,28 @@ export class Terrain {
   // Colour for dirt particles from this cell.
   colorAt(col: number, row: number, tile: number): number {
     if (isOre(tile) && Math.random() < 0.5) return ORES[oreIndex(tile)].color;
-    return BANDS[this.bands[row * this.world.cols + col]].light; // lighter than the ground so it shows against it
+    return BANDS[this.nearest(row * this.world.cols + col)].light; // lighter than the ground so it shows against it
   }
 
   private drawCell(c: number, r: number): void {
     const { world } = this;
     const i = r * world.cols + c;
-    const band = this.bands[i];
+    const band = this.layer[i];
+    const mix = this.mixLevel[i];
     const v = this.variants[i];
     const t = world.get(c, r);
+    const dirt = mix ? Frame.blendDirt(band, mix, v) : Frame.dirt(band, v);
 
-    if (r >= world.surfaceRow) this.back.putTileAt(Frame.back(band, v), c, r);
+    if (r >= world.surfaceRow) this.back.putTileAt(mix ? Frame.blendBack(band, mix, v) : Frame.back(band, v), c, r);
 
     let ground = -1;
     let feature = -1;
-    if (t === Tile.Dirt) ground = Frame.dirt(band, v);
+    if (t === Tile.Dirt) ground = dirt;
     else if (t === Tile.Topsoil) ground = Frame.topsoil(v);
     else if (t === Tile.Bedrock) ground = Frame.bedrock(v);
     else if (t === Tile.Pad) ground = Frame.pad();
     else if (t === Tile.Boulder || isOre(t)) {
-      ground = Frame.dirt(band, v);
+      ground = dirt;
       feature = t === Tile.Boulder ? Frame.boulder(v) : Frame.ore(oreIndex(t), v);
     }
     put(this.ground, ground, c, r);
@@ -118,7 +140,7 @@ export class Terrain {
     const open = (cc: number, rr: number) => world.get(cc, rr) === Tile.Empty;
     let mask = (open(c, r - 1) ? 1 : 0) | (open(c + 1, r) ? 2 : 0) | (open(c, r + 1) ? 4 : 0) | (open(c - 1, r) ? 8 : 0);
     if (r === world.surfaceRow) mask &= ~1; // grass handles the top of the surface
-    put(this.edges, mask ? Frame.edge(this.bands[r * world.cols + c], mask) : -1, c, r);
+    put(this.edges, mask ? Frame.edge(this.nearest(r * world.cols + c), mask) : -1, c, r);
   }
 }
 

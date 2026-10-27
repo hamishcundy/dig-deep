@@ -5,6 +5,8 @@ import { Hud } from '../ui/Hud';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
 import type { GameScene } from './GameScene';
 
+const PAUSED = 'Paused';
+
 // Screen-space overlay: HUD, menus and touch controls, unaffected by camera zoom.
 export class UIScene extends Phaser.Scene {
   joystick!: Joystick;
@@ -24,6 +26,24 @@ export class UIScene extends Phaser.Scene {
     this.joystick = new Joystick(this);
     this.hud = new Hud(this);
     this.panel = new Panel(this);
+    this.makePauseButton();
+
+    const kb = this.input.keyboard!;
+    kb.on('keydown-ESC', () => (this.panel.open ? this.panel.cancel() : this.gameScene.pause()));
+    kb.on('keydown-P', () => (this.panel.title === PAUSED ? this.panel.cancel() : this.gameScene.pause()));
+  }
+
+  // Top right, under the cash. Mostly for touch; desktop also has Esc and P.
+  private makePauseButton(): void {
+    const button = this.add.container(0, 0, [
+      this.add.rectangle(0, 0, 36, 36, 0x000000, 0.45).setStrokeStyle(1, 0xffffff, 0.4),
+      this.add.rectangle(-5, 0, 4, 14, 0xffffff),
+      this.add.rectangle(5, 0, 4, 14, 0xffffff),
+    ]);
+    button.setSize(36, 36).setInteractive({ useHandCursor: true }).on('pointerup', () => this.gameScene.pause());
+    const layout = () => button.setPosition(this.scale.width - 30, 58);
+    layout();
+    this.scale.on('resize', layout);
   }
 
   update(time: number, delta: number): void {
@@ -132,6 +152,36 @@ export class UIScene extends Phaser.Scene {
         onCancel: close,
       });
     }
+  }
+
+  showPause(): void {
+    const game = this.gameScene;
+    const resume = () => {
+      this.hidePanel();
+      game.resume();
+    };
+    const touch = this.sys.game.device.input.touch;
+    this.showPanel({
+      title: PAUSED,
+      lines: touch ? ['Drag on the left to move'] : ['Move   arrows or WASD', 'Pause  Esc or P'],
+      buttons: [
+        { label: 'Resume', onClick: resume },
+        { label: 'New game', onClick: () => this.confirmNewGame() },
+      ],
+      onCancel: resume,
+    });
+  }
+
+  private confirmNewGame(): void {
+    this.showPanel({
+      title: 'New game?',
+      lines: ['Cash, upgrades and this', 'world will be lost.'],
+      buttons: [
+        { label: 'Start new game', onClick: () => this.gameScene.newGame() },
+        { label: 'Back', onClick: () => this.showPause() },
+      ],
+      onCancel: () => this.showPause(),
+    });
   }
 
   showDeath(reason: string): void {

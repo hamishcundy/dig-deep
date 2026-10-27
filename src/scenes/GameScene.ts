@@ -64,6 +64,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('ui');
     this.ui = this.scene.get('ui') as UIScene;
     this.ui.events.once('create', () => (this.controls = new Controls(this, this.ui.joystick)));
+    this.game.events.on(Phaser.Core.Events.HIDDEN, () => this.pause()); // e.g. switching apps on a phone
   }
 
   private fitCamera(): void {
@@ -145,6 +146,18 @@ export class GameScene extends Phaser.Scene {
     this.pod.vx = 0;
     this.pod.thrusting = false;
     this.ui.showBuilding(b.kind);
+  }
+
+  // Freeze play and show the pause menu. Ignored while another menu is up.
+  pause(): void {
+    if (this.mode !== 'play') return;
+    this.mode = 'menu';
+    this.pod.thrusting = false;
+    this.ui.showPause();
+  }
+
+  resume(): void {
+    this.mode = 'play';
   }
 
   closeMenu(): void {

@@ -19,9 +19,13 @@ export const Frame = {
   boulder: (v: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 1 + ORES.length * VARIANTS + (v % 2),
   // mask bits: 1 top, 2 right, 4 bottom, 8 left are open
   edge: (band: number, mask: number) => 2 * NB * VARIANTS + 2 * VARIANTS + 3 + ORES.length * VARIANTS + band * 16 + mask,
+  // Transition from band `pair` to the next one down; level 1..3 = 25/50/75% of the deeper band.
+  blendDirt: (pair: number, level: number, v: number) => Frame.edge(NB - 1, 15) + 1 + (pair * BLEND_LEVELS + level - 1) * VARIANTS + v,
+  blendBack: (pair: number, level: number, v: number) => Frame.blendDirt(NB - 1, 1, 0) + (pair * BLEND_LEVELS + level - 1) * VARIANTS + v,
 };
 
-const FRAME_COUNT = Frame.edge(NB - 1, 15) + 1;
+export const BLEND_LEVELS = 3;
+const FRAME_COUNT = Frame.blendBack(NB - 2, BLEND_LEVELS, VARIANTS - 1) + 1;
 const GEMS = new Set(['Emerald', 'Ruby', 'Diamond']);
 
 const css = (c: number, a = 1) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -43,6 +47,16 @@ export function makeTerrainTexture(scene: Phaser.Scene): void {
     }
     for (let m = 1; m < 16; m++) drawEdge(ctx, ...at(Frame.edge(b, m)), band, m, mulberry32(b * 307 + m * 17));
   });
+  for (let pair = 0; pair < NB - 1; pair++) {
+    for (let level = 1; level <= BLEND_LEVELS; level++) {
+      for (let v = 0; v < VARIANTS; v++) {
+        const share = level / (BLEND_LEVELS + 1);
+        const seed = 1700 + pair * 97 + level * 13 + v;
+        drawBlend(ctx, at(Frame.dirt(pair, v)), at(Frame.dirt(pair + 1, v)), at(Frame.blendDirt(pair, level, v)), share, mulberry32(seed));
+        drawBlend(ctx, at(Frame.back(pair, v)), at(Frame.back(pair + 1, v)), at(Frame.blendBack(pair, level, v)), share, mulberry32(seed));
+      }
+    }
+  }
   for (let v = 0; v < VARIANTS; v++) {
     const [x, y] = at(Frame.topsoil(v));
     drawDirt(ctx, x, y, BANDS[0], mulberry32(900 + v));
@@ -60,6 +74,43 @@ export function makeTerrainTexture(scene: Phaser.Scene): void {
   });
   for (let v = 0; v < 2; v++) drawBoulder(ctx, ...at(Frame.boulder(v)), mulberry32(1500 + v));
   tex.refresh();
+}
+
+// Mix two finished tiles in blotchy patches: `share` of the pixels come from `to`.
+// Patches come from smooth value noise on an 8px lattice, so it reads as one
+// layer creeping into the other rather than a checkerboard.
+function drawBlend(
+  ctx: CanvasRenderingContext2D,
+  from: readonly [number, number],
+  to: readonly [number, number],
+  dest: readonly [number, number],
+  share: number,
+  rand: () => number,
+) {
+  const a = ctx.getImageData(from[0], from[1], TILE, TILE);
+  const b = ctx.getImageData(to[0], to[1], TILE, TILE);
+  const step = 8;
+  const n = TILE / step + 1;
+  const lattice = Array.from({ length: n * n }, () => rand());
+  const at = (ix: number, iy: number) => lattice[iy * n + ix];
+  for (let py = 0; py < TILE; py++) {
+    for (let px = 0; px < TILE; px++) {
+      const fx = px / step;
+      const fy = py / step;
+      const ix = Math.floor(fx);
+      const iy = Math.floor(fy);
+      const tx = fx - ix;
+      const ty = fy - iy;
+      const top = at(ix, iy) * (1 - tx) + at(ix + 1, iy) * tx;
+      const bottom = at(ix, iy + 1) * (1 - tx) + at(ix + 1, iy + 1) * tx;
+      const value = top * (1 - ty) + bottom * ty + (rand() - 0.5) * 0.12;
+      if (value < share) {
+        const i = (py * TILE + px) * 4;
+        for (let k = 0; k < 4; k++) a.data[i + k] = b.data[i + k];
+      }
+    }
+  }
+  ctx.putImageData(a, dest[0], dest[1]);
 }
 
 function specks(ctx: CanvasRenderingContext2D, x: number, y: number, rand: () => number, n: number, size: number, color: string) {
