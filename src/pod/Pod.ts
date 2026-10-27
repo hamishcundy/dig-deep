@@ -2,6 +2,15 @@ import { DRILL, PHYSICS, POD, TILE } from '../config';
 import { World } from '../world/World';
 import { isDrillable, isOre, isSolid, Tile } from '../world/tiles';
 
+// Multipliers from upgrades and cargo weight.
+export interface PodPower {
+  thrust: number; // engine, less cargo weight
+  speed: number; // engine: top speed and acceleration
+  drill: number; // drill speed
+}
+
+const STOCK_POWER: PodPower = { thrust: 1, speed: 1, drill: 1 };
+
 export interface Stick {
   x: number; // -1 (left) .. 1 (right)
   y: number; // -1 (up) .. 1 (down)
@@ -43,6 +52,7 @@ export class Pod {
   thrusting = false;
   facing: 1 | -1 = 1;
   drill: Drill | null = null;
+  private power = STOCK_POWER;
   landingSpeed = 0; // px/s of the hardest landing this frame, 0 if none
   private blockedDir = 0;
 
@@ -74,8 +84,9 @@ export class Pod {
     return Math.floor((this.x + this.w / 2) / TILE);
   }
 
-  // Returns the tile dug out this frame, if any. thrustScale < 1 for a heavy cargo bay.
-  update(dt: number, stick: Stick, thrustScale = 1): DugTile | null {
+  // Returns the tile dug out this frame, if any.
+  update(dt: number, stick: Stick, power: PodPower = STOCK_POWER): DugTile | null {
+    this.power = power;
     this.landingSpeed = 0;
     if (this.drill) return this.updateDrill(dt);
 
@@ -83,7 +94,7 @@ export class Pod {
     if (this.tryStartDrill(stick)) return null;
 
     if (Math.abs(stick.x) > 0.1) this.facing = stick.x > 0 ? 1 : -1;
-    this.updateVelocity(dt, stick, thrustScale);
+    this.updateVelocity(dt, stick);
 
     const dx = this.vx * dt;
     const dy = this.vy * dt;
@@ -97,20 +108,21 @@ export class Pod {
     return null;
   }
 
-  private updateVelocity(dt: number, stick: Stick, thrustScale: number): void {
+  private updateVelocity(dt: number, stick: Stick): void {
+    const { thrust, speed } = this.power;
     const p = PHYSICS;
     if (Math.abs(stick.x) > 0.1) {
-      this.vx += stick.x * p.accel * TILE * dt;
+      this.vx += stick.x * p.accel * speed * TILE * dt;
     } else {
       const slow = (this.grounded ? p.groundFriction : p.airDrag) * TILE * dt;
       this.vx = Math.abs(this.vx) <= slow ? 0 : this.vx - Math.sign(this.vx) * slow;
     }
-    this.vx = clamp(this.vx, -p.maxSpeedX * TILE, p.maxSpeedX * TILE);
+    this.vx = clamp(this.vx, -p.maxSpeedX * speed * TILE, p.maxSpeedX * speed * TILE);
 
     this.thrusting = stick.y < -0.3;
     this.vy += p.gravity * TILE * dt;
-    if (this.thrusting) this.vy -= p.thrust * thrustScale * TILE * dt;
-    this.vy = clamp(this.vy, -p.maxRise * TILE, p.maxFall * TILE);
+    if (this.thrusting) this.vy -= p.thrust * thrust * TILE * dt;
+    this.vy = clamp(this.vy, -p.maxRise * speed * TILE, p.maxFall * TILE);
   }
 
   // Down needs the pod sitting on the tile; sideways works on the ground or hovering against a wall.
@@ -144,7 +156,7 @@ export class Pod {
     const tile = this.world.get(col, row);
     const depth = Math.max(0, this.world.depthOf(row));
     const duration =
-      (DRILL.baseTime * (1 + depth * DRILL.depthHardness) * (isOre(tile) ? DRILL.oreTimeFactor : 1)) / DRILL.speed;
+      (DRILL.baseTime * (1 + depth * DRILL.depthHardness) * (isOre(tile) ? DRILL.oreTimeFactor : 1)) / this.power.drill;
     this.drill = { col, row, dir, fromX: this.x, fromY: this.y, toX, toY, t: 0, duration };
     if (dir !== 'down') this.facing = dir === 'right' ? 1 : -1;
     this.vx = 0;

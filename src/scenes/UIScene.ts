@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ECONOMY, METRES_PER_TILE, ORES, type BuildingKind } from '../config';
+import { ECONOMY, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type UpgradeKey } from '../config';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
@@ -88,6 +88,24 @@ export class UIScene extends Phaser.Scene {
           closeButton,
         ],
         onCancel: close,
+      });
+    } else if (kind === 'shop') {
+      const keys = Object.keys(UPGRADES) as UpgradeKey[];
+      const buttons = keys.map((key): PanelButton => {
+        const { name, format } = UPGRADES[key];
+        const price = s.upgradePrice(key);
+        const current = format(s.value(key));
+        if (price === null) return { label: `${name.padEnd(7)}${current}  max`, disabled: true };
+        const label = `${name.padEnd(7)}${current}→${format(s.value(key, s.levels[key] + 1))}`.padEnd(17) + `$${price.toLocaleString()}`;
+        if (price > s.money) return { label, disabled: true };
+        return { label, onClick: () => (s.buyUpgrade(key), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
+      });
+      this.showPanel({
+        title: 'Shop',
+        lines: [`Cash  $${s.money.toLocaleString()}`],
+        buttons: [...buttons, closeButton],
+        onCancel: close,
+        plain: true,
       });
     } else {
       const need = s.maxHull - s.hull;

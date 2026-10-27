@@ -34,11 +34,23 @@ export const PHYSICS = {
   cargoThrustPenalty: 0.03, // thrust lost per item in the cargo bay (0.03 = 3%)
 };
 
-// Starting pod. Upgrades will raise these.
-export const STATS = {
-  fuelCapacity: 10, // litres
-  maxHull: 10,
-  cargoCapacity: 10, // items
+export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo';
+
+export interface UpgradeDef {
+  name: string;
+  values: number[]; // [stock, level 1, level 2, ...]
+  format: (v: number) => string;
+}
+
+// Price of each level, shared by every upgrade.
+export const UPGRADE_PRICES = [500, 2500, 10000, 40000];
+
+export const UPGRADES: Record<UpgradeKey, UpgradeDef> = {
+  drill: { name: 'Drill', values: [1, 1.4, 1.9, 2.6, 3.5], format: (v) => `x${v}` }, // drill speed multiplier
+  hull: { name: 'Hull', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // max hull
+  engine: { name: 'Engine', values: [1, 1.12, 1.25, 1.4, 1.55], format: (v) => `${Math.round(v * 100)}%` }, // thrust and top speed
+  fuel: { name: 'Fuel', values: [10, 15, 22, 32, 45], format: (v) => `${v}L` }, // tank litres
+  cargo: { name: 'Cargo', values: [10, 14, 19, 25, 32], format: (v) => `${v}` }, // items
 };
 
 export const FUEL = {
@@ -59,7 +71,7 @@ export const ECONOMY = {
   repairPrice: 10, // $ per hull point
 };
 
-export type BuildingKind = 'fuel' | 'sell' | 'repair';
+export type BuildingKind = 'fuel' | 'sell' | 'repair' | 'shop';
 
 export interface BuildingDef {
   kind: BuildingKind;
@@ -74,6 +86,7 @@ export const BUILDINGS: BuildingDef[] = [
   { kind: 'fuel', label: 'FUEL', col: 3, width: 4, color: 0xc0392b },
   { kind: 'sell', label: 'SELL', col: 10, width: 4, color: 0x2e86c1 },
   { kind: 'repair', label: 'REPAIR', col: 24, width: 4, color: 0x27ae60 },
+  { kind: 'shop', label: 'SHOP', col: 30, width: 4, color: 0x8e44ad },
 ];
 
 export const SPAWN_COL = 18;
@@ -82,7 +95,6 @@ export const DRILL = {
   baseTime: 0.35, // seconds to drill one dirt tile at the surface
   depthHardness: 1 / 150, // +100% drill time every 150 rows
   oreTimeFactor: 1.2,
-  speed: 1, // multiplier; drill upgrades raise this
 };
 
 export interface OreDef {
