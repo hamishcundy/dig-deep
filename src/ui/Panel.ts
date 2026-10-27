@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sound } from '../audio/sound';
 import { textStyle } from './theme';
 
 export interface PanelButton {
@@ -31,7 +32,10 @@ export class Panel {
   constructor(private scene: Phaser.Scene) {
     scene.scale.on('resize', () => this.spec && this.show(this.spec));
     const kb = scene.input.keyboard!;
-    kb.on('keydown-ENTER', () => !this.spec?.plain && this.spec?.buttons.find((b) => !b.disabled)?.onClick?.());
+    kb.on('keydown-ENTER', () => {
+      const b = this.spec?.plain ? undefined : this.spec?.buttons.find((b) => !b.disabled);
+      if (b?.onClick) press(b.onClick);
+    });
   }
 
   get open(): boolean {
@@ -81,7 +85,7 @@ export class Panel {
       const text = b.detail
         ? s.add.text(PAD * 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0, 0.5)
         : s.add.text(pw / 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0.5);
-      if (!b.disabled && b.onClick) rect.setInteractive({ useHandCursor: true }).on('pointerup', b.onClick);
+      if (!b.disabled && b.onClick) rect.setInteractive({ useHandCursor: true }).on('pointerup', () => press(b.onClick!));
       content.push(rect, text);
       if (b.detail) content.push(s.add.text(pw - PAD * 2, y + BUTTON_H / 2, b.detail, textStyle(26, color)).setOrigin(1, 0.5));
       y += BUTTON_H + GAP;
@@ -100,4 +104,9 @@ export class Panel {
     this.root = null;
     this.spec = null;
   }
+}
+
+function press(onClick: () => void): void {
+  sound.tick();
+  onClick();
 }

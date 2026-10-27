@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import { ECONOMY, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type UpgradeKey } from '../config';
+import { sound } from '../audio/sound';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
+import { installOption, onInstallChange, showInstallPrompt } from '../pwa';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
 import type { GameScene } from './GameScene';
 
 const PAUSED = 'Paused';
+const TITLE = 'Dig Deep';
 
 // Screen-space overlay: HUD, menus and touch controls, unaffected by camera zoom.
 export class UIScene extends Phaser.Scene {
@@ -92,7 +95,7 @@ export class UIScene extends Phaser.Scene {
       else if (q.litres <= 0) buy = { label: 'Not enough cash', disabled: true };
       else {
         const label = q.litres < need - 0.05 ? `Buy ${q.litres.toFixed(1)} L` : 'Fill up';
-        buy = { label, detail: `$${q.cost}`, onClick: () => (s.buyFuel(), refresh()) };
+        buy = { label, detail: `$${q.cost}`, onClick: () => (s.buyFuel(), sound.fill(), refresh()) };
       }
       this.showPanel({
         title: 'Fuel',
@@ -111,7 +114,7 @@ export class UIScene extends Phaser.Scene {
         lines: lines.length ? [...lines, ['Total', `$${value.toLocaleString()}`]] : ['Cargo bay is empty'],
         buttons: [
           value > 0
-            ? { label: 'Sell all', detail: `$${value.toLocaleString()}`, onClick: () => (s.sellAll(), this.toast(`+$${value}`, 0xffe066), refresh()) }
+            ? { label: 'Sell all', detail: `$${value.toLocaleString()}`, onClick: () => (s.sellAll(), sound.coin(), this.toast(`+$${value}`, 0xffe066), refresh()) }
             : { label: 'Nothing to sell', disabled: true },
           closeButton,
         ],
@@ -127,7 +130,7 @@ export class UIScene extends Phaser.Scene {
         const label = `${name} ${current} → ${format(s.value(key, s.levels[key] + 1))}`;
         const detail = `$${price.toLocaleString()}`;
         if (price > s.money) return { label, detail, disabled: true };
-        return { label, detail, onClick: () => (s.buyUpgrade(key), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
+        return { label, detail, onClick: () => (s.buyUpgrade(key), sound.upgrade(), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
       });
       this.showPanel({
         title: 'Shop',
@@ -144,7 +147,7 @@ export class UIScene extends Phaser.Scene {
       else if (q.points <= 0) fix = { label: 'Not enough cash', disabled: true };
       else {
         const label = q.points < need - 0.05 ? 'Repair some' : 'Repair';
-        fix = { label, detail: `$${q.cost}`, onClick: () => (s.repair(), refresh()) };
+        fix = { label, detail: `$${q.cost}`, onClick: () => (s.repair(), sound.repair(), refresh()) };
       }
       this.showPanel({
         title: 'Repair',
@@ -167,6 +170,7 @@ export class UIScene extends Phaser.Scene {
       lines: touch ? ['Drag on the left to move'] : [['Move', 'arrows or WASD'], ['Pause', 'Esc or P']],
       buttons: [
         { label: 'Resume', onClick: resume },
+        this.soundButton(() => this.showPause()),
         { label: 'New game', onClick: () => this.confirmNewGame(() => this.showPause()) },
       ],
       onCancel: resume,
@@ -180,20 +184,35 @@ export class UIScene extends Phaser.Scene {
       this.gameScene.startPlaying();
     };
     const back = () => this.showTitle(resumed);
+    // The install button comes and goes as the browser offers it.
+    onInstallChange(() => this.panel.title === TITLE && back());
+    const install = installOption();
     this.showPanel({
-      title: 'Dig Deep',
+      title: TITLE,
       big: true,
       lines: [resumed ? 'Welcome back.' : 'Dig for ore. Sell it. Go deeper.'],
-      buttons: resumed
-        ? [
-            { label: 'Continue', onClick: play },
-            { label: 'How to play', onClick: () => this.showHowTo(back) },
-            { label: 'New game', onClick: () => this.confirmNewGame(back) },
-          ]
-        : [
-            { label: 'Play', onClick: play },
-            { label: 'How to play', onClick: () => this.showHowTo(back) },
-          ],
+      buttons: [
+        { label: resumed ? 'Continue' : 'Play', onClick: play },
+        { label: 'How to play', onClick: () => this.showHowTo(back) },
+        ...(resumed ? [{ label: 'New game', onClick: () => this.confirmNewGame(back) }] : []),
+        this.soundButton(back),
+        ...(install === 'prompt' ? [{ label: 'Install app', onClick: () => showInstallPrompt() }] : []),
+        ...(install === 'ios' ? [{ label: 'Install app', onClick: () => this.showIosInstall(back) }] : []),
+      ],
+    });
+  }
+
+  // Toggles sound, then redraws the menu it is on.
+  private soundButton(redraw: () => void): PanelButton {
+    return { label: sound.muted ? 'Sound: off' : 'Sound: on', onClick: () => (sound.toggleMute(), redraw()) };
+  }
+
+  private showIosInstall(back: () => void): void {
+    this.showPanel({
+      title: 'Install app',
+      lines: ['Tap Share in your browser', '(in Safari it may be under ···),', 'then Add to Home Screen.'],
+      buttons: [{ label: 'Got it', onClick: back }],
+      onCancel: back,
     });
   }
 

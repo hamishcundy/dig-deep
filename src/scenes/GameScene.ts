@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { BUILDINGS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, type BuildingDef } from '../config';
+import { sound } from '../audio/sound';
+import { BUILDINGS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef } from '../config';
 import { PodStats } from '../game/PodStats';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
@@ -91,6 +92,13 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(delta / 1000, 0.05);
     if (this.mode === 'play') this.step(dt);
     const d = this.pod.drill;
+    const playing = this.mode === 'play';
+    const { fuel, fuelCapacity } = this.stats;
+    sound.loops({
+      engine: playing && this.pod.thrusting ? Phaser.Math.Clamp(-this.pod.vy / (PHYSICS.maxRise * TILE), 0, 1) : null,
+      drill: playing && d ? this.world.depthOf(d.row) / WORLD.depth : null,
+      lowFuel: playing && fuel > 0 && fuel < fuelCapacity * FUEL.lowWarning,
+    });
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
     this.surface.update(dt);
@@ -111,14 +119,21 @@ export class GameScene extends Phaser.Scene {
     if (dug) this.onDug(dug);
 
     stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
-    if (hadFuel && stats.fuel === 0) this.ui.toast('Out of fuel!', 0xff3b3b, 2000);
+    if (hadFuel && stats.fuel === 0) {
+      this.ui.toast('Out of fuel!', 0xff3b3b, 2000);
+      sound.sputter();
+    }
 
     const impact = pod.landingSpeed / TILE;
-    if (impact > 0) this.podView.landed(impact);
+    if (impact > 0) {
+      this.podView.landed(impact);
+      sound.land(impact);
+    }
     if (impact > FALL.safeSpeed) {
       const damage = (impact - FALL.safeSpeed) * FALL.damagePerSpeed;
       stats.hull -= damage;
       this.podView.hit();
+      sound.clank();
       this.cameras.main.shake(150, 0.004 + damage * 0.002);
       if (stats.hull <= 0) {
         stats.hull = 0;
@@ -148,16 +163,21 @@ export class GameScene extends Phaser.Scene {
   private onDug(dug: DugTile): void {
     this.podView.burst(dug.col, dug.row, this.terrain.colorAt(dug.col, dug.row, dug.tile));
     this.terrain.dug(dug.col, dug.row);
+    sound.dig();
     if (!isOre(dug.tile)) return;
     const i = oreIndex(dug.tile);
     const ore = ORES[i];
     if (this.stats.cargoFull) {
       this.ui.toast(`Cargo full: ${ore.name} lost`, 0xff6b6b);
+      sound.nope();
     } else {
       this.stats.cargo[i]++;
       this.ui.oreCollected(i, (dug.col + 0.5) * TILE, (dug.row + 0.5) * TILE);
-      if (this.stats.cargoFull) this.ui.toast('Cargo full: sell at the surface', 0xff8a3b, 2000);
-      else this.ui.toast(`+${ore.name}`, ore.color);
+      sound.ore(i);
+      if (this.stats.cargoFull) {
+        this.ui.toast('Cargo full: sell at the surface', 0xff8a3b, 2000);
+        sound.nope(0.3);
+      } else this.ui.toast(`+${ore.name}`, ore.color);
     }
   }
 
@@ -193,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'dead';
     this.pod.thrusting = false;
     this.cameras.main.shake(300, 0.012);
+    sound.crash();
     this.ui.showDeath(reason);
   }
 
