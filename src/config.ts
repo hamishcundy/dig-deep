@@ -58,6 +58,7 @@ export const FUEL = {
   thrust: 0.12, // extra litres/s while thrusting
   drill: 0.15, // extra litres/s while drilling
   lowWarning: 0.25, // share of the tank where the gauge turns red
+  minSnapshot: 1, // litres; the surface save point isn't updated with less than this
 };
 
 export const FALL = {

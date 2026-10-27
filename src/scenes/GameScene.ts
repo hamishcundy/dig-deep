@@ -12,6 +12,7 @@ import { makeTextures } from './textures';
 import type { UIScene } from './UIScene';
 
 const PAD_STOP_SPEED = 1.5; // tiles/s; slower than this on a pad opens the building
+const NO_INPUT = { x: 0, y: 0 };
 
 type Mode = 'play' | 'menu' | 'dead';
 
@@ -89,14 +90,14 @@ export class GameScene extends Phaser.Scene {
       speed: stats.enginePower,
       drill: stats.drillSpeed,
     };
-    const dug = pod.update(dt, this.controls.read(), power);
+    // With an empty tank the engine is off: no steering, thrust or new drilling,
+    // but the pod keeps its momentum, so it can still coast or fall onto the fuel pad.
+    const hadFuel = stats.fuel > 0;
+    const dug = pod.update(dt, hadFuel ? this.controls.read() : NO_INPUT, power);
     if (dug) this.onDug(dug);
 
-    stats.fuel -= (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt;
-    if (stats.fuel <= 0) {
-      stats.fuel = 0;
-      return this.die('Out of fuel');
-    }
+    stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
+    if (hadFuel && stats.fuel === 0) this.ui.toast('Out of fuel!', 0xff3b3b, 2000);
 
     const impact = pod.landingSpeed / TILE;
     if (impact > 0) this.podView.landed(impact);
@@ -122,6 +123,11 @@ export class GameScene extends Phaser.Scene {
     else if (pad !== this.usedPad && Math.abs(pod.vx) < PAD_STOP_SPEED * TILE) {
       this.usedPad = pad;
       this.openBuilding(pad);
+    }
+
+    // Out of fuel is only over once the pod comes to rest (and hasn't just opened a building).
+    if (stats.fuel === 0 && this.mode === 'play' && pod.grounded && !pod.drill && Math.abs(pod.vx) < 0.2 * TILE) {
+      this.die('Out of fuel');
     }
   }
 
@@ -150,7 +156,7 @@ export class GameScene extends Phaser.Scene {
 
   // Freeze play and show the pause menu. Ignored while another menu is up.
   pause(): void {
-    if (this.mode !== 'play') return;
+    if (this.mode !== 'play' || !this.controls) return; // controls exist once the UI scene is up
     this.mode = 'menu';
     this.pod.thrusting = false;
     this.ui.showPause();
@@ -190,6 +196,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private takeSnapshot(): void {
+    if (this.stats.fuel < FUEL.minSnapshot) return; // never roll back to a spot you can't leave
     this.snapshot = { cells: this.world.cells.slice(), stats: this.stats.clone(), col: this.pod.col };
   }
 
