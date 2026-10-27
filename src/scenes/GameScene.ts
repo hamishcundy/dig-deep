@@ -102,6 +102,7 @@ export class GameScene extends Phaser.Scene {
       engine: playing && this.pod.thrusting ? Phaser.Math.Clamp(-this.pod.vy / (PHYSICS.maxRise * TILE), 0, 1) : null,
       drill: playing && d ? this.world.depthOf(d.row) / WORLD.depth : null,
       lowFuel: this.fuelState !== 'ok' && this.stats.fuel > 0,
+      cough: this.fuelState === 'critical' && this.stats.fuel > 0,
     });
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);

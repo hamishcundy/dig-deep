@@ -3,11 +3,13 @@
 
 const MUTE_KEY = 'digdeep-muted';
 const VOLUME = 0.6;
+const ENGINE_GAIN = 0.08;
 
 export interface LoopState {
   engine: number | null; // thrusting: 0..1 how fast the pod is rising, or null when off
   drill: number | null; // drilling: 0..1 how hard the ground is, or null when off
   lowFuel: boolean;
+  cough: boolean; // the engine splutters now and then
 }
 
 interface ToneOpts {
@@ -36,6 +38,7 @@ class Sound {
   private engineOn = false;
   private drillOn = false;
   private nextBeep = 0;
+  private nextCough = 0;
   private isMuted = readMuted();
 
   constructor() {
@@ -121,7 +124,10 @@ class Sound {
     const t = this.ctx!.currentTime;
 
     const engineOn = state.engine !== null;
-    if (engineOn !== this.engineOn) this.engineGain.gain.setTargetAtTime(engineOn ? 0.08 : 0, t, 0.05);
+    if (engineOn !== this.engineOn) {
+      this.engineGain.gain.cancelScheduledValues(t); // drops any cough still to come
+      this.engineGain.gain.setTargetAtTime(engineOn ? ENGINE_GAIN : 0, t, 0.05);
+    }
     if (engineOn) this.engineOsc.frequency.setTargetAtTime(48 + 30 * state.engine!, t, 0.1);
     this.engineOn = engineOn;
 
@@ -136,6 +142,27 @@ class Sound {
     else if (t >= this.nextBeep) {
       this.tone(880, 0.09, { type: 'sine', gain: 0.25 });
       this.nextBeep = t + 1.2;
+    }
+
+    if (!state.cough) this.nextCough = t + 0.3;
+    else if (t >= this.nextCough) {
+      this.cough(engineOn);
+      this.nextCough = t + 0.6 + Math.random();
+    }
+  }
+
+  // A pop or two from the exhaust; while thrusting the engine hum also cuts out briefly.
+  private cough(thrusting: boolean): void {
+    const t = this.ctx!.currentTime;
+    const pops = Math.random() < 0.4 ? 2 : 1;
+    for (let i = 0; i < pops; i++) {
+      this.noise(0.08, { filter: 'lowpass', freq: 350, gain: 1, at: i * 0.14 });
+      this.tone(70, 0.1, { type: 'sawtooth', gain: 0.3, to: 40, at: i * 0.14 });
+    }
+    if (thrusting) {
+      const g = this.engineGain.gain;
+      g.setTargetAtTime(0, t, 0.01);
+      g.setTargetAtTime(ENGINE_GAIN, t + 0.1 + pops * 0.14, 0.03);
     }
   }
 
