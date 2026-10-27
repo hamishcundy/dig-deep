@@ -35,34 +35,55 @@ const EPS = 0.001;
 export class Pod {
   readonly w = POD.width * TILE;
   readonly h = POD.height * TILE;
-  x: number; // top-left
-  y: number;
+  x = 0; // top-left
+  y = 0;
   vx = 0;
   vy = 0;
   grounded = false;
   thrusting = false;
   facing: 1 | -1 = 1;
   drill: Drill | null = null;
+  landingSpeed = 0; // px/s of the hardest landing this frame, 0 if none
   private blockedDir = 0;
 
   constructor(private world: World, col: number, row: number) {
+    this.placeAt(col, row);
+  }
+
+  // Stand the pod on the floor of the given cell, at rest.
+  placeAt(col: number, row: number): void {
     this.x = col * TILE + (TILE - this.w) / 2;
     this.y = row * TILE + TILE - this.h;
+    this.vx = 0;
+    this.vy = 0;
+    this.drill = null;
+    this.thrusting = false;
+    this.grounded = true;
   }
 
   get drillDir(): DrillDir | null {
     return this.drill?.dir ?? null;
   }
 
-  // Returns the tile dug out this frame, if any.
-  update(dt: number, stick: Stick): DugTile | null {
+  // Row of the cell the pod is standing in (its bottom edge).
+  get row(): number {
+    return Math.floor((this.y + this.h - 1) / TILE);
+  }
+
+  get col(): number {
+    return Math.floor((this.x + this.w / 2) / TILE);
+  }
+
+  // Returns the tile dug out this frame, if any. thrustScale < 1 for a heavy cargo bay.
+  update(dt: number, stick: Stick, thrustScale = 1): DugTile | null {
+    this.landingSpeed = 0;
     if (this.drill) return this.updateDrill(dt);
 
     this.thrusting = false;
     if (this.grounded && this.tryStartDrill(stick)) return null;
 
     if (Math.abs(stick.x) > 0.1) this.facing = stick.x > 0 ? 1 : -1;
-    this.updateVelocity(dt, stick);
+    this.updateVelocity(dt, stick, thrustScale);
 
     const dx = this.vx * dt;
     const dy = this.vy * dt;
@@ -76,7 +97,7 @@ export class Pod {
     return null;
   }
 
-  private updateVelocity(dt: number, stick: Stick): void {
+  private updateVelocity(dt: number, stick: Stick, thrustScale: number): void {
     const p = PHYSICS;
     if (Math.abs(stick.x) > 0.1) {
       this.vx += stick.x * p.accel * TILE * dt;
@@ -88,7 +109,7 @@ export class Pod {
 
     this.thrusting = stick.y < -0.3;
     this.vy += p.gravity * TILE * dt;
-    if (this.thrusting) this.vy -= p.thrust * TILE * dt;
+    if (this.thrusting) this.vy -= p.thrust * thrustScale * TILE * dt;
     this.vy = clamp(this.vy, -p.maxRise * TILE, p.maxFall * TILE);
   }
 
@@ -178,6 +199,7 @@ export class Pod {
     }
     if (dy > 0) {
       this.y = Math.floor((ny + this.h - EPS) / TILE) * TILE - this.h;
+      this.landingSpeed = Math.max(this.landingSpeed, this.vy);
       this.vy = 0;
       this.grounded = true;
       return;

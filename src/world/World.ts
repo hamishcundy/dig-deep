@@ -1,4 +1,4 @@
-import { GEN, ORES, WORLD } from '../config';
+import { BUILDINGS, GEN, ORES, WORLD } from '../config';
 import { Tile, oreTile } from './tiles';
 
 // Small, fast seeded RNG (mulberry32) so a seed always builds the same world.
@@ -46,6 +46,9 @@ export class World {
       for (let col = 0; col < this.cols; col++) {
         this.set(col, row, this.pickTile(depth, rand));
       }
+    }
+    for (const b of BUILDINGS) {
+      for (let col = b.col; col < b.col + b.width; col++) this.set(col, this.surfaceRow, Tile.Pad);
     }
   }
 

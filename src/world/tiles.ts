@@ -7,7 +7,8 @@ export const Tile = {
   Topsoil: 2,
   Boulder: 3,
   Bedrock: 4,
-  FirstOre: 5, // ORES[i] is tile FirstOre + i
+  Pad: 5, // concrete under a building
+  FirstOre: 6, // ORES[i] is tile FirstOre + i
 } as const;
 
 export const TILE_COUNT = Tile.FirstOre + ORES.length;
@@ -20,10 +21,14 @@ export function isOre(tile: number): boolean {
   return tile >= Tile.FirstOre;
 }
 
+export function oreIndex(tile: number): number {
+  return tile - Tile.FirstOre;
+}
+
 export function isSolid(tile: number): boolean {
   return tile !== Tile.Empty;
 }
 
 export function isDrillable(tile: number): boolean {
-  return tile !== Tile.Empty && tile !== Tile.Boulder && tile !== Tile.Bedrock;
+  return tile !== Tile.Empty && tile !== Tile.Boulder && tile !== Tile.Bedrock && tile !== Tile.Pad;
 }

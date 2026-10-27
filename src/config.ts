@@ -31,7 +31,52 @@ export const PHYSICS = {
   airDrag: 3, // tiles/s², slowdown with no input in the air
   cornerNudge: 0.5, // tiles; how far the pod slides to line up with a shaft above
   cornerNudgeSpeed: 6, // tiles/s
+  cargoThrustPenalty: 0.03, // thrust lost per item in the cargo bay (0.03 = 3%)
 };
+
+// Starting pod. Upgrades will raise these.
+export const STATS = {
+  fuelCapacity: 10, // litres
+  maxHull: 10,
+  cargoCapacity: 7, // items
+};
+
+export const FUEL = {
+  idle: 0.06, // litres/s, always while the engine runs
+  thrust: 0.12, // extra litres/s while thrusting
+  drill: 0.15, // extra litres/s while drilling
+  lowWarning: 0.25, // share of the tank where the gauge turns red
+};
+
+export const FALL = {
+  safeSpeed: 9, // tiles/s; landing slower than this does no damage
+  damagePerSpeed: 0.8, // hull lost per tile/s above safeSpeed
+};
+
+export const ECONOMY = {
+  startMoney: 20,
+  fuelPrice: 2, // $ per litre
+  repairPrice: 10, // $ per hull point
+};
+
+export type BuildingKind = 'fuel' | 'sell' | 'repair';
+
+export interface BuildingDef {
+  kind: BuildingKind;
+  label: string;
+  col: number; // leftmost column
+  width: number; // columns
+  color: number;
+}
+
+// Buildings sit on concrete pads on the surface; drive onto a pad to use one.
+export const BUILDINGS: BuildingDef[] = [
+  { kind: 'fuel', label: 'FUEL', col: 3, width: 4, color: 0xc0392b },
+  { kind: 'sell', label: 'SELL', col: 10, width: 4, color: 0x2e86c1 },
+  { kind: 'repair', label: 'REPAIR', col: 24, width: 4, color: 0x27ae60 },
+];
+
+export const SPAWN_COL = 18;
 
 export const DRILL = {
   baseTime: 0.35, // seconds to drill one dirt tile at the surface

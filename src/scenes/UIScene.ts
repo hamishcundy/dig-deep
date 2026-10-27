@@ -1,29 +1,122 @@
 import Phaser from 'phaser';
-import { METRES_PER_TILE, TILE } from '../config';
+import { ECONOMY, METRES_PER_TILE, ORES, type BuildingKind } from '../config';
 import { Joystick } from '../input/Joystick';
+import { Hud } from '../ui/Hud';
+import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
 import type { GameScene } from './GameScene';
 
-// Screen-space overlay: HUD and touch controls, unaffected by camera zoom.
+// Screen-space overlay: HUD, menus and touch controls, unaffected by camera zoom.
 export class UIScene extends Phaser.Scene {
   joystick!: Joystick;
-  private depthText!: Phaser.GameObjects.Text;
+  private hud!: Hud;
+  private panel!: Panel;
 
   constructor() {
     super('ui');
   }
 
+  private get gameScene(): GameScene {
+    return this.scene.get('game') as GameScene;
+  }
+
   create(): void {
     this.input.addPointer(2);
     this.joystick = new Joystick(this);
-    this.depthText = this.add
-      .text(12, 12, '', { fontFamily: 'monospace', fontSize: '18px', color: '#ffffff' })
-      .setStroke('#000000', 4);
+    this.hud = new Hud(this);
+    this.panel = new Panel(this);
   }
 
-  update(): void {
-    const game = this.scene.get('game') as GameScene;
-    const { pod, world } = game;
-    const depth = Math.max(0, Math.floor((pod.y + pod.h - 1) / TILE) - world.surfaceRow + 1);
-    this.depthText.setText(`Depth ${depth * METRES_PER_TILE} m`);
+  update(time: number): void {
+    const { pod, world, stats } = this.gameScene;
+    const depth = Math.max(0, pod.row - world.surfaceRow + 1);
+    this.hud.update(stats, depth * METRES_PER_TILE, time);
+  }
+
+  toast(message: string, color?: number): void {
+    this.hud.toast(message, color);
+  }
+
+  private showPanel(spec: PanelSpec): void {
+    this.panel.show(spec);
+    this.joystick.setEnabled(false);
+  }
+
+  private hidePanel(): void {
+    this.panel.hide();
+    this.joystick.setEnabled(true);
+  }
+
+  showBuilding(kind: BuildingKind): void {
+    const game = this.gameScene;
+    const s = game.stats;
+    const close = () => {
+      this.hidePanel();
+      game.closeMenu();
+    };
+    const closeButton: PanelButton = { label: 'Close', onClick: close };
+    const refresh = () => this.showBuilding(kind);
+
+    if (kind === 'fuel') {
+      const need = s.fuelCapacity - s.fuel;
+      const q = s.fuelQuote();
+      let buy: PanelButton;
+      if (need < 0.05) buy = { label: 'Tank is full', disabled: true };
+      else if (q.litres <= 0) buy = { label: 'Not enough cash', disabled: true };
+      else {
+        const label = q.litres < need - 0.05 ? `Buy ${q.litres.toFixed(1)} L: $${q.cost}` : `Fill up: $${q.cost}`;
+        buy = { label, onClick: () => (s.buyFuel(), refresh()) };
+      }
+      this.showPanel({
+        title: 'Fuel',
+        lines: [`Tank  ${s.fuel.toFixed(1)} / ${s.fuelCapacity} L`, `Price $${ECONOMY.fuelPrice} per litre`, `Cash  $${s.money}`],
+        buttons: [buy, closeButton],
+        onCancel: close,
+      });
+    } else if (kind === 'sell') {
+      const lines = ORES.flatMap((ore, i) => {
+        const n = s.cargo[i];
+        return n ? [`${ore.name} x${n}`.padEnd(13) + `$${n * ore.price}`] : [];
+      });
+      const value = s.cargoValue;
+      this.showPanel({
+        title: 'Sell',
+        lines: lines.length ? [...lines, `Total`.padEnd(13) + `$${value}`] : ['Cargo bay is empty'],
+        buttons: [
+          value > 0
+            ? { label: `Sell all: $${value}`, onClick: () => (s.sellAll(), this.toast(`+$${value}`, 0xffe066), refresh()) }
+            : { label: 'Nothing to sell', disabled: true },
+          closeButton,
+        ],
+        onCancel: close,
+      });
+    } else {
+      const need = s.maxHull - s.hull;
+      const q = s.repairQuote();
+      let fix: PanelButton;
+      if (need < 0.05) fix = { label: 'Hull is fine', disabled: true };
+      else if (q.points <= 0) fix = { label: 'Not enough cash', disabled: true };
+      else {
+        const label = q.points < need - 0.05 ? `Repair some: $${q.cost}` : `Repair: $${q.cost}`;
+        fix = { label, onClick: () => (s.repair(), refresh()) };
+      }
+      this.showPanel({
+        title: 'Repair',
+        lines: [`Hull  ${Math.ceil(s.hull)} / ${s.maxHull}`, `Price $${ECONOMY.repairPrice} per point`, `Cash  $${s.money}`],
+        buttons: [fix, closeButton],
+        onCancel: close,
+      });
+    }
+  }
+
+  showDeath(reason: string): void {
+    const game = this.gameScene;
+    this.showPanel({
+      title: reason,
+      lines: ['Back to your last stop', 'on the surface. Anything', 'mined since is lost.'],
+      buttons: [
+        { label: 'Continue', onClick: () => (this.hidePanel(), game.continueAfterDeath()) },
+        { label: 'New game', onClick: () => game.newGame() },
+      ],
+    });
   }
 }

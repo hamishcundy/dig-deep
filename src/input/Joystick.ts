@@ -9,6 +9,7 @@ const ZONE_WIDTH = 0.6; // left share of the screen that starts the joystick
 export class Joystick {
   readonly stick: Stick = { x: 0, y: 0 };
   private pointerId: number | null = null;
+  private enabled = true;
   private baseX = 0;
   private baseY = 0;
   private base: Phaser.GameObjects.Arc;
@@ -33,13 +34,20 @@ export class Joystick {
     return this.pointerId !== null;
   }
 
+  // Off while a menu is open, so taps on buttons don't steer the pod.
+  setEnabled(on: boolean): void {
+    this.enabled = on;
+    if (!on && this.pointerId !== null) this.release();
+    this.hint.setVisible(on && this.scene.sys.game.device.input.touch);
+  }
+
   private layout(): void {
     const { height } = this.scene.scale;
     this.hint.setPosition(RADIUS + 32, height - RADIUS - 48);
   }
 
   private onDown(p: Phaser.Input.Pointer): void {
-    if (this.pointerId !== null || p.x > this.scene.scale.width * ZONE_WIDTH) return;
+    if (!this.enabled || this.pointerId !== null || p.x > this.scene.scale.width * ZONE_WIDTH) return;
     this.pointerId = p.id;
     this.baseX = p.x;
     this.baseY = p.y;
@@ -69,12 +77,15 @@ export class Joystick {
   }
 
   private onUp(p: Phaser.Input.Pointer): void {
-    if (p.id !== this.pointerId) return;
+    if (p.id === this.pointerId) this.release();
+  }
+
+  private release(): void {
     this.pointerId = null;
     this.stick.x = 0;
     this.stick.y = 0;
     this.base.setVisible(false);
     this.knob.setVisible(false);
-    this.hint.setVisible(this.scene.sys.game.device.input.touch);
+    this.hint.setVisible(this.enabled && this.scene.sys.game.device.input.touch);
   }
 }

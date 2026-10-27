@@ -37,6 +37,18 @@ function makeTiles(scene: Phaser.Scene): void {
       for (let i = 0; i < 6; i++) ctx.fillRect(ox + rand() * (TILE - 6), rand() * (TILE - 4), 6, 4);
       continue;
     }
+    if (t === Tile.Pad) {
+      ctx.fillStyle = '#8f9399';
+      ctx.fillRect(ox, 0, TILE, TILE);
+      ctx.fillStyle = '#6f737a';
+      ctx.fillRect(ox, TILE - 2, TILE, 2);
+      ctx.fillRect(ox + TILE - 2, 0, 2, TILE);
+      for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = i % 2 ? '#222222' : '#f2c200';
+        ctx.fillRect(ox + i * 8, 0, 8, 5);
+      }
+      continue;
+    }
     dirt(ox);
     if (t === Tile.Topsoil) {
       ctx.fillStyle = '#4c9a3b';
