@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BUILDINGS, TILE, type BuildingDef, type BuildingKind } from '../config';
+import { textStyle } from '../ui/theme';
 import { mulberry32, World } from '../world/World';
 
 // Everything above ground: sky, sun, drifting clouds, parallax hills and the
@@ -107,7 +108,7 @@ export class Surface {
 
     const sign = SIGN[b.kind];
     this.scene.add
-      .text(x + w / 2, y + sign.y, b.label, { fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#ffffff' })
+      .text(x + w / 2, y + sign.y, b.label, textStyle(16))
       .setOrigin(0.5)
       .setResolution(3);
 

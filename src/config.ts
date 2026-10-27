@@ -15,6 +15,15 @@ export const VIEW = {
 
 export const METRES_PER_TILE = 2;
 
+// It gets darker with depth; the pod's headlight lights a pool around it.
+export const DARKNESS = {
+  startDepth: 10, // rows below the surface where it starts getting dark
+  fullDepth: 150, // rows where it reaches max
+  max: 0.9, // opacity of the dark at its deepest
+  lightInner: 3, // tiles of full light around the pod
+  lightOuter: 7, // tiles where the light has faded out
+};
+
 export const POD = {
   width: 0.8,
   height: 0.75,

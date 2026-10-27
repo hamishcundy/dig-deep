@@ -94,7 +94,7 @@ export class Terrain {
       const img = this.scene.add
         .image(c * TILE + 6 + Math.random() * 20, r * TILE + 6 + Math.random() * 20, 'sparkle')
         .setScale(0)
-        .setDepth(1);
+        .setDepth(6); // above the darkness, so gems glint even out of the headlight
       this.scene.tweens.add({ targets: img, scale: 1, angle: 45, duration: 220, yoyo: true, onComplete: () => img.destroy() });
       return;
     }

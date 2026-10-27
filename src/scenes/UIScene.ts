@@ -91,27 +91,27 @@ export class UIScene extends Phaser.Scene {
       if (need < 0.05) buy = { label: 'Tank is full', disabled: true };
       else if (q.litres <= 0) buy = { label: 'Not enough cash', disabled: true };
       else {
-        const label = q.litres < need - 0.05 ? `Buy ${q.litres.toFixed(1)} L: $${q.cost}` : `Fill up: $${q.cost}`;
-        buy = { label, onClick: () => (s.buyFuel(), refresh()) };
+        const label = q.litres < need - 0.05 ? `Buy ${q.litres.toFixed(1)} L` : 'Fill up';
+        buy = { label, detail: `$${q.cost}`, onClick: () => (s.buyFuel(), refresh()) };
       }
       this.showPanel({
         title: 'Fuel',
-        lines: [`Tank  ${s.fuel.toFixed(1)} / ${s.fuelCapacity} L`, `Price $${ECONOMY.fuelPrice} per litre`, `Cash  $${s.money}`],
+        lines: [['Tank', `${s.fuel.toFixed(1)} / ${s.fuelCapacity} L`], ['Price', `$${ECONOMY.fuelPrice} per litre`], ['Cash', `$${s.money.toLocaleString()}`]],
         buttons: [buy, closeButton],
         onCancel: close,
       });
     } else if (kind === 'sell') {
-      const lines = ORES.flatMap((ore, i) => {
+      const lines = ORES.flatMap((ore, i): [string, string][] => {
         const n = s.cargo[i];
-        return n ? [`${ore.name} x${n}`.padEnd(13) + `$${n * ore.price}`] : [];
+        return n ? [[`${ore.name} x${n}`, `$${(n * ore.price).toLocaleString()}`]] : [];
       });
       const value = s.cargoValue;
       this.showPanel({
         title: 'Sell',
-        lines: lines.length ? [...lines, `Total`.padEnd(13) + `$${value}`] : ['Cargo bay is empty'],
+        lines: lines.length ? [...lines, ['Total', `$${value.toLocaleString()}`]] : ['Cargo bay is empty'],
         buttons: [
           value > 0
-            ? { label: `Sell all: $${value}`, onClick: () => (s.sellAll(), this.toast(`+$${value}`, 0xffe066), refresh()) }
+            ? { label: 'Sell all', detail: `$${value.toLocaleString()}`, onClick: () => (s.sellAll(), this.toast(`+$${value}`, 0xffe066), refresh()) }
             : { label: 'Nothing to sell', disabled: true },
           closeButton,
         ],
@@ -123,14 +123,15 @@ export class UIScene extends Phaser.Scene {
         const { name, format } = UPGRADES[key];
         const price = s.upgradePrice(key);
         const current = format(s.value(key));
-        if (price === null) return { label: `${name.padEnd(7)}${current}  max`, disabled: true };
-        const label = `${name.padEnd(7)}${current}→${format(s.value(key, s.levels[key] + 1))}`.padEnd(17) + `$${price.toLocaleString()}`;
-        if (price > s.money) return { label, disabled: true };
-        return { label, onClick: () => (s.buyUpgrade(key), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
+        if (price === null) return { label: `${name} ${current}`, detail: 'max', disabled: true };
+        const label = `${name} ${current} → ${format(s.value(key, s.levels[key] + 1))}`;
+        const detail = `$${price.toLocaleString()}`;
+        if (price > s.money) return { label, detail, disabled: true };
+        return { label, detail, onClick: () => (s.buyUpgrade(key), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
       });
       this.showPanel({
         title: 'Shop',
-        lines: [`Cash  $${s.money.toLocaleString()}`],
+        lines: [['Cash', `$${s.money.toLocaleString()}`]],
         buttons: [...buttons, closeButton],
         onCancel: close,
         plain: true,
@@ -142,12 +143,12 @@ export class UIScene extends Phaser.Scene {
       if (need < 0.05) fix = { label: 'Hull is fine', disabled: true };
       else if (q.points <= 0) fix = { label: 'Not enough cash', disabled: true };
       else {
-        const label = q.points < need - 0.05 ? `Repair some: $${q.cost}` : `Repair: $${q.cost}`;
-        fix = { label, onClick: () => (s.repair(), refresh()) };
+        const label = q.points < need - 0.05 ? 'Repair some' : 'Repair';
+        fix = { label, detail: `$${q.cost}`, onClick: () => (s.repair(), refresh()) };
       }
       this.showPanel({
         title: 'Repair',
-        lines: [`Hull  ${Math.ceil(s.hull)} / ${s.maxHull}`, `Price $${ECONOMY.repairPrice} per point`, `Cash  $${s.money}`],
+        lines: [['Hull', `${Math.ceil(s.hull)} / ${s.maxHull}`], ['Price', `$${ECONOMY.repairPrice} per point`], ['Cash', `$${s.money.toLocaleString()}`]],
         buttons: [fix, closeButton],
         onCancel: close,
       });
@@ -163,24 +164,65 @@ export class UIScene extends Phaser.Scene {
     const touch = this.sys.game.device.input.touch;
     this.showPanel({
       title: PAUSED,
-      lines: touch ? ['Drag on the left to move'] : ['Move   arrows or WASD', 'Pause  Esc or P'],
+      lines: touch ? ['Drag on the left to move'] : [['Move', 'arrows or WASD'], ['Pause', 'Esc or P']],
       buttons: [
         { label: 'Resume', onClick: resume },
-        { label: 'New game', onClick: () => this.confirmNewGame() },
+        { label: 'New game', onClick: () => this.confirmNewGame(() => this.showPause()) },
       ],
       onCancel: resume,
     });
   }
 
-  private confirmNewGame(): void {
+  // Shown on load, over the surface. Enter or the first button starts play.
+  showTitle(resumed: boolean): void {
+    const play = () => {
+      this.hidePanel();
+      this.gameScene.startPlaying();
+    };
+    const back = () => this.showTitle(resumed);
+    this.showPanel({
+      title: 'Dig Deep',
+      big: true,
+      lines: [resumed ? 'Welcome back.' : 'Dig for ore. Sell it. Go deeper.'],
+      buttons: resumed
+        ? [
+            { label: 'Continue', onClick: play },
+            { label: 'How to play', onClick: () => this.showHowTo(back) },
+            { label: 'New game', onClick: () => this.confirmNewGame(back) },
+          ]
+        : [
+            { label: 'Play', onClick: play },
+            { label: 'How to play', onClick: () => this.showHowTo(back) },
+          ],
+    });
+  }
+
+  private showHowTo(back: () => void): void {
+    const touch = this.sys.game.device.input.touch;
+    this.showPanel({
+      title: 'How to play',
+      lines: [
+        'Drill down and collect ore.',
+        'Sell it at the surface, then',
+        'buy upgrades at the shop.',
+        'Watch your fuel and hull:',
+        'refuel and repair up top.',
+        touch ? 'Drag on the left to move.' : 'Move with arrows or WASD.',
+      ],
+      buttons: [{ label: 'Got it', onClick: back }],
+      onCancel: back,
+    });
+  }
+
+  private confirmNewGame(back: () => void): void {
     this.showPanel({
       title: 'New game?',
       lines: ['Cash, upgrades and this', 'world will be lost.'],
       buttons: [
         { label: 'Start new game', onClick: () => this.gameScene.newGame() },
-        { label: 'Back', onClick: () => this.showPause() },
+        { label: 'Back', onClick: back },
       ],
-      onCancel: () => this.showPause(),
+      onCancel: back,
     });
   }
 

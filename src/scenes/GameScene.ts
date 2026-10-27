@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { BUILDINGS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, type BuildingDef } from '../config';
 import { PodStats } from '../game/PodStats';
+import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
 import { Pod, type DugTile } from '../pod/Pod';
 import { World } from '../world/World';
 import { isOre, oreIndex } from '../world/tiles';
+import { Darkness } from './Darkness';
 import { PodView } from './PodView';
 import { Surface } from './Surface';
 import { Terrain } from './Terrain';
@@ -14,7 +16,7 @@ import type { UIScene } from './UIScene';
 const PAD_STOP_SPEED = 1.5; // tiles/s; slower than this on a pad opens the building
 const NO_INPUT = { x: 0, y: 0 };
 
-type Mode = 'play' | 'menu' | 'dead';
+type Mode = 'title' | 'play' | 'menu' | 'dead';
 
 // What we roll back to when the pod is lost: the last time it stood on the surface.
 interface Snapshot {
@@ -27,10 +29,11 @@ export class GameScene extends Phaser.Scene {
   world!: World;
   pod!: Pod;
   stats!: PodStats;
-  private mode: Mode = 'play';
+  private mode: Mode = 'title'; // frozen behind the title screen until Play
   private surface!: Surface;
   private terrain!: Terrain;
   private podView!: PodView;
+  private darkness!: Darkness;
   private controls!: Controls;
   private ui!: UIScene;
   private snapshot!: Snapshot;
@@ -43,8 +46,13 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     makeTextures(this);
-    this.world = new World(readSeed());
-    this.stats = new PodStats();
+    // Resume the saved game unless the URL asks for a specific world.
+    const urlSeed = readUrlSeed();
+    const save = urlSeed === null ? loadSave() : null;
+    this.world = new World(save?.seed ?? urlSeed ?? Math.floor(Math.random() * 1e9));
+    const resumed = save !== null && save.cells.length === this.world.cells.length;
+    if (resumed) this.world.cells.set(save.cells);
+    this.stats = resumed ? save.stats : new PodStats();
     console.log(`seed ${this.world.seed} (add ?seed=${this.world.seed} to the URL to replay this world)`);
 
     const { cols, rows, surfaceRow } = this.world;
@@ -52,8 +60,10 @@ export class GameScene extends Phaser.Scene {
 
     this.terrain = new Terrain(this, this.world);
 
-    this.pod = new Pod(this.world, SPAWN_COL, surfaceRow - 1);
+    this.pod = new Pod(this.world, resumed ? save.col : SPAWN_COL, surfaceRow - 1);
+    this.usedPad = padAt(this.pod.col); // don't pop a building open on load
     this.podView = new PodView(this, this.pod);
+    this.darkness = new Darkness(this);
     this.takeSnapshot();
 
     const cam = this.cameras.main;
@@ -64,7 +74,10 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch('ui');
     this.ui = this.scene.get('ui') as UIScene;
-    this.ui.events.once('create', () => (this.controls = new Controls(this, this.ui.joystick)));
+    this.ui.events.once('create', () => {
+      this.controls = new Controls(this, this.ui.joystick);
+      this.ui.showTitle(resumed);
+    });
     this.game.events.on(Phaser.Core.Events.HIDDEN, () => this.pause()); // e.g. switching apps on a phone
   }
 
@@ -81,6 +94,7 @@ export class GameScene extends Phaser.Scene {
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
     this.surface.update(dt);
+    this.darkness.update(dt, this.pod, this.world.depthOf(this.pod.row));
   }
 
   private step(dt: number): void {
@@ -166,6 +180,10 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'play';
   }
 
+  startPlaying(): void {
+    this.mode = 'play';
+  }
+
   closeMenu(): void {
     this.mode = 'play';
     this.takeSnapshot();
@@ -190,6 +208,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   newGame(): void {
+    clearSave();
     const url = new URL(location.href);
     url.searchParams.delete('seed');
     location.href = url.toString();
@@ -198,6 +217,7 @@ export class GameScene extends Phaser.Scene {
   private takeSnapshot(): void {
     if (this.stats.fuel < FUEL.minSnapshot) return; // never roll back to a spot you can't leave
     this.snapshot = { cells: this.world.cells.slice(), stats: this.stats.clone(), col: this.pod.col };
+    writeSave({ seed: this.world.seed, ...this.snapshot });
   }
 
 }
@@ -206,8 +226,8 @@ function padAt(col: number): BuildingDef | null {
   return BUILDINGS.find((b) => col >= b.col && col < b.col + b.width) ?? null;
 }
 
-function readSeed(): number {
+function readUrlSeed(): number | null {
   const param = new URLSearchParams(location.search).get('seed');
   const seed = param ? parseInt(param, 10) : NaN;
-  return Number.isFinite(seed) ? seed : Math.floor(Math.random() * 1e9);
+  return Number.isFinite(seed) ? seed : null;
 }

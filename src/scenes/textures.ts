@@ -8,6 +8,7 @@ export function makeTextures(scene: Phaser.Scene): void {
   makeTerrainTexture(scene);
   makePod(scene);
   makeParticles(scene);
+  makeIcons(scene);
 }
 
 // Pod body fills the top 24px (the hitbox); the drill bit hangs below it.
@@ -117,4 +118,132 @@ function makeParticles(scene: Phaser.Scene): void {
   g.fillRect(2, 2, 3, 3);
   g.generateTexture('sparkle', 7, 7);
   g.destroy();
+}
+
+// 16px HUD icons, drawn pixel by pixel from little maps ('.' is transparent).
+function makeIcons(scene: Phaser.Scene): void {
+  const icons: Record<string, { rows: string[]; colors: Record<string, string> }> = {
+    'icon-fuel': {
+      // jerry can
+      rows: [
+        '................',
+        '.....kkkk.......',
+        '....kyyyyk.kk...',
+        '...kyyyyyykrrk..',
+        '..krrrrrrrrrrrk.',
+        '..krwwrrrrrrrrk.',
+        '..krwrrrrrrrrrk.',
+        '..krrrrrrrdrrrk.',
+        '..krrrrrrdrrrrk.',
+        '..krrrrrdrrrrrk.',
+        '..krrrrdrrrrrrk.',
+        '..krrrrrrrrrrrk.',
+        '..krrrrrrrrrrrk.',
+        '..kddddddddddddk',
+        '...kkkkkkkkkkkk.',
+        '................',
+      ],
+      colors: { k: '#2b1a12', r: '#e04a2f', d: '#a8321d', w: '#ff9a7a', y: '#ffd84d' },
+    },
+    'icon-hull': {
+      // shield
+      rows: [
+        '................',
+        '...kkkkkkkkkk...',
+        '..kggggggggggk..',
+        '..kgwwgggggggk..',
+        '..kgwggggggddk..',
+        '..kggggggggddk..',
+        '..kggggggggddk..',
+        '..kgggggggdddk..',
+        '...kggggggddk...',
+        '...kgggggdddk...',
+        '....kgggdddk....',
+        '.....kggddk.....',
+        '......kgdk......',
+        '.......kk.......',
+        '................',
+        '................',
+      ],
+      colors: { k: '#10301a', g: '#4ade80', d: '#2a9d55', w: '#c8ffd9' },
+    },
+    'icon-cargo': {
+      // crate
+      rows: [
+        '................',
+        '................',
+        '..kkkkkkkkkkkk..',
+        '..kllllllllllk..',
+        '..kbbbbbbbbbbk..',
+        '..kbdbbbbbbdbk..',
+        '..kbbdbbbbdbbk..',
+        '..kbbbdbbdbbbk..',
+        '..kbbbbddbbbbk..',
+        '..kbbbdbbdbbbk..',
+        '..kbbdbbbbdbbk..',
+        '..kbdbbbbbbdbk..',
+        '..kbbbbbbbbbbk..',
+        '..kkkkkkkkkkkk..',
+        '................',
+        '................',
+      ],
+      colors: { k: '#2b1a0e', b: '#b9824a', d: '#7a5128', l: '#e0b07a' },
+    },
+    'icon-depth': {
+      // down arrow
+      rows: [
+        '................',
+        '......kkkk......',
+        '......kwwk......',
+        '......kwwk......',
+        '......kwwk......',
+        '......kwwk......',
+        '......kwwk......',
+        '...kkkkwwkkkk...',
+        '...kwwwwwwwwk...',
+        '....kwwwwwwk....',
+        '.....kwwwwk.....',
+        '......kwwk......',
+        '.......kk.......',
+        '................',
+        '................',
+        '................',
+      ],
+      colors: { k: '#10202b', w: '#8fd3ff' },
+    },
+    'icon-coin': {
+      rows: [
+        '................',
+        '.....kkkkkk.....',
+        '....kyyyyyyk....',
+        '...kyywwyyyyk...',
+        '..kyywyyyyyyok..',
+        '..kywyyookyyok..',
+        '..kyyyokyyyyok..',
+        '..kyyyyookyyok..',
+        '..kyyyyyykoyok..',
+        '..kyyyookyyyok..',
+        '..kyyyyyyyyook..',
+        '...kyyyyyyook...',
+        '....kooooooook...',
+        '.....kkkkkk.....',
+        '................',
+        '................',
+      ],
+      colors: { k: '#3a2800', y: '#ffd84d', o: '#d9a400', w: '#fff6c0' },
+    },
+  };
+  for (const [key, { rows, colors }] of Object.entries(icons)) {
+    const tex = scene.textures.createCanvas(key, 16, 16)!;
+    const ctx = tex.getContext();
+    rows.forEach((row, y) => {
+      [...row].forEach((ch, x) => {
+        const color = colors[ch];
+        if (!color) return;
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, 1, 1);
+      });
+    });
+    tex.refresh();
+  }
 }

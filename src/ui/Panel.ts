@@ -1,17 +1,20 @@
 import Phaser from 'phaser';
+import { textStyle } from './theme';
 
 export interface PanelButton {
   label: string;
+  detail?: string; // right-aligned, e.g. a price
   onClick?: () => void;
   disabled?: boolean;
 }
 
 export interface PanelSpec {
   title: string;
-  lines: string[];
+  lines: (string | [string, string])[]; // a pair is a label and a right-aligned value
   buttons: PanelButton[];
   onCancel?: () => void; // Esc
   plain?: boolean; // no highlighted button, and Enter does nothing
+  big?: boolean; // large logo-style title
 }
 
 const PAD = 20;
@@ -49,17 +52,22 @@ export class Panel {
     const s = this.scene;
     const { width, height } = s.scale;
     const pw = Math.min(360, width - 32);
-    const ph = PAD * 2 + 32 + spec.lines.length * LINE_H + GAP + spec.buttons.length * (BUTTON_H + GAP);
+    const titleH = spec.big ? 64 : 38;
+    const ph = PAD * 2 + titleH + spec.lines.length * LINE_H + GAP + spec.buttons.length * (BUTTON_H + GAP);
 
     // Content is laid out from the panel's top-left, then scaled down if the screen is short (phone landscape).
     const content: Phaser.GameObjects.GameObject[] = [
       s.add.rectangle(0, 0, pw, ph, 0x1d2330).setOrigin(0).setStrokeStyle(2, 0x4a5568),
-      s.add.text(PAD, PAD, spec.title, { fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: '#ffffff' }),
+      spec.big
+        ? s.add.text(pw / 2, PAD - 4, spec.title, textStyle(60, '#ffd84d')).setOrigin(0.5, 0).setStroke('#7a4a00', 6)
+        : s.add.text(PAD, PAD, spec.title, textStyle(32)),
     ];
 
-    let y = PAD + 32;
+    let y = PAD + titleH;
     for (const line of spec.lines) {
-      content.push(s.add.text(PAD, y, line, { fontFamily: 'monospace', fontSize: '17px', color: '#d6dbe4' }));
+      const [left, right] = typeof line === 'string' ? [line, ''] : line;
+      content.push(s.add.text(PAD, y, left, textStyle(24, '#d6dbe4')));
+      if (right) content.push(s.add.text(pw - PAD, y, right, textStyle(24)).setOrigin(1, 0));
       y += LINE_H;
     }
     y += GAP;
@@ -68,15 +76,14 @@ export class Panel {
     for (const b of spec.buttons) {
       const fill = b.disabled ? 0x2d3340 : b === primary ? 0x2f6fde : 0x4a5568;
       const rect = s.add.rectangle(PAD, y, pw - PAD * 2, BUTTON_H, fill).setOrigin(0);
-      const text = s.add
-        .text(pw / 2, y + BUTTON_H / 2, b.label, {
-          fontFamily: 'monospace',
-          fontSize: '18px',
-          color: b.disabled ? '#7a8394' : '#ffffff',
-        })
-        .setOrigin(0.5);
+      const color = b.disabled ? '#7a8394' : '#ffffff';
+      // With a detail the label sits left and the detail right; otherwise the label is centred.
+      const text = b.detail
+        ? s.add.text(PAD * 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0, 0.5)
+        : s.add.text(pw / 2, y + BUTTON_H / 2, b.label, textStyle(26, color)).setOrigin(0.5);
       if (!b.disabled && b.onClick) rect.setInteractive({ useHandCursor: true }).on('pointerup', b.onClick);
       content.push(rect, text);
+      if (b.detail) content.push(s.add.text(pw - PAD * 2, y + BUTTON_H / 2, b.detail, textStyle(26, color)).setOrigin(1, 0.5));
       y += BUTTON_H + GAP;
     }
 
