@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { FUEL } from '../config';
 import type { PodStats } from '../game/PodStats';
+import type { FuelState } from '../scenes/GameScene';
 import { textStyle } from './theme';
 
 const BAR_W = 104;
@@ -10,20 +10,27 @@ const PANEL_X = 8;
 const PANEL_Y = 8;
 const BAR_X = PANEL_X + 32; // after the icon
 
-// A framed gauge with a little shine.
+// A framed gauge with a little shine, and an optional tick mark.
 class Bar {
   private fill: Phaser.GameObjects.Rectangle;
+  private mark: Phaser.GameObjects.Rectangle;
   readonly frame: Phaser.GameObjects.Rectangle;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.frame = scene.add.rectangle(x, y, BAR_W, BAR_H, 0x0b0d12, 0.85).setOrigin(0, 0.5).setStrokeStyle(2, 0x000000, 0.9);
     this.fill = scene.add.rectangle(x + 1, y, BAR_W - 2, BAR_H - 4, 0xffffff).setOrigin(0, 0.5);
     scene.add.rectangle(x + 1, y - 2, BAR_W - 2, 1, 0xffffff, 0.25).setOrigin(0, 0.5);
+    this.mark = scene.add.rectangle(x, y, 2, BAR_H + 6, 0xffffff).setStrokeStyle(1, 0x000000, 0.8).setVisible(false);
   }
 
   set(share: number, color: number): void {
     this.fill.width = (BAR_W - 2) * Phaser.Math.Clamp(share, 0, 1);
     this.fill.fillColor = color;
+  }
+
+  setMark(share: number): void {
+    this.mark.x = this.frame.x + 1 + (BAR_W - 2) * Phaser.Math.Clamp(share, 0, 1);
+    this.mark.setVisible(true);
   }
 }
 
@@ -71,11 +78,12 @@ export class Hud {
     this.coin.x = this.money.x - this.money.displayWidth - 14;
   }
 
-  update(stats: PodStats, depthMetres: number, time: number, dt: number): void {
-    const fuelShare = stats.fuel / stats.fuelCapacity;
-    const low = fuelShare < FUEL.lowWarning;
-    const flash = low && Math.floor(time / 300) % 2 === 0;
-    this.fuel.set(fuelShare, flash ? 0xff3b3b : low ? 0xff8a3b : 0xffc531);
+  // fuelMark: litres needed to get home, shown as a tick on the fuel gauge.
+  update(stats: PodStats, fuelMark: number, fuelState: FuelState, depthMetres: number, time: number, dt: number): void {
+    // Low fuel flashes the gauge; critical flashes it faster.
+    const flash = fuelState !== 'ok' && Math.floor(time / (fuelState === 'critical' ? 150 : 300)) % 2 === 0;
+    this.fuel.set(stats.fuel / stats.fuelCapacity, flash ? 0xff3b3b : fuelState !== 'ok' ? 0xff8a3b : 0xffc531);
+    this.fuel.setMark(fuelMark / stats.fuelCapacity);
     const hullShare = stats.hull / stats.maxHull;
     this.hull.set(hullShare, hullShare < 0.3 ? 0xff3b3b : 0x4ade80);
 

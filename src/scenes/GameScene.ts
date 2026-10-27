@@ -14,6 +14,8 @@ import { Terrain } from './Terrain';
 import { makeTextures } from './textures';
 import type { UIScene } from './UIScene';
 
+export type FuelState = 'ok' | 'low' | 'critical';
+
 const PAD_STOP_SPEED = 1.5; // tiles/s; slower than this on a pad opens the building
 const NO_INPUT = { x: 0, y: 0 };
 
@@ -40,6 +42,8 @@ export class GameScene extends Phaser.Scene {
   private snapshot!: Snapshot;
   private wasAtSurface = true;
   private usedPad: BuildingDef | null = null;
+  fuelMark = 0; // litres to get home with a margin; drawn as a tick on the fuel gauge
+  fuelState: FuelState = 'ok';
 
   constructor() {
     super('game');
@@ -93,11 +97,11 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'play') this.step(dt);
     const d = this.pod.drill;
     const playing = this.mode === 'play';
-    const { fuel, fuelCapacity } = this.stats;
+    this.updateFuelState(playing);
     sound.loops({
       engine: playing && this.pod.thrusting ? Phaser.Math.Clamp(-this.pod.vy / (PHYSICS.maxRise * TILE), 0, 1) : null,
       drill: playing && d ? this.world.depthOf(d.row) / WORLD.depth : null,
-      lowFuel: playing && fuel > 0 && fuel < fuelCapacity * FUEL.lowWarning,
+      lowFuel: this.fuelState !== 'ok' && this.stats.fuel > 0,
     });
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
@@ -108,7 +112,7 @@ export class GameScene extends Phaser.Scene {
   private step(dt: number): void {
     const { pod, stats, world } = this;
     const power = {
-      thrust: stats.enginePower * (1 - (stats.cargoCount / stats.cargoCapacity) * PHYSICS.fullCargoThrustPenalty),
+      thrust: this.thrustPower(),
       speed: stats.enginePower,
       drill: stats.drillSpeed,
     };
@@ -158,6 +162,38 @@ export class GameScene extends Phaser.Scene {
     if (stats.fuel === 0 && this.mode === 'play' && pod.grounded && !pod.drill && Math.abs(pod.vx) < 0.2 * TILE) {
       this.die('Out of fuel');
     }
+  }
+
+  // Low once fuel is below what it takes to get home with a margin; critical once
+  // it is below the bare climb. Warnings only show during play.
+  private updateFuelState(playing: boolean): void {
+    const { stats, pod, world } = this;
+    const need = this.fuelToGetHome();
+    this.fuelMark = need * FUEL.homeMargin + FUEL.homeBuffer;
+    const prev = this.fuelState;
+    this.fuelState = !playing || stats.fuel > this.fuelMark ? 'ok' : stats.fuel > need ? 'low' : 'critical';
+    if (prev === 'ok' && this.fuelState !== 'ok' && stats.fuel > 0) {
+      this.ui.toast(pod.row < world.surfaceRow ? 'Low fuel: refuel' : 'Low fuel: head up', 0xff8a3b, 2000);
+    }
+  }
+
+  // Litres to fly straight up to the surface and drive to the fuel pad, at full
+  // speed with no margin. A fuller cargo bay accelerates slower.
+  private fuelToGetHome(): number {
+    const { pod, stats, world } = this;
+    const climb = Math.max(0, pod.row - (world.surfaceRow - 1));
+    const speed = PHYSICS.maxRise * stats.enginePower;
+    const lift = PHYSICS.thrust * this.thrustPower() - PHYSICS.gravity;
+    const climbTime = climb > 0 ? climb / speed + speed / (2 * lift) : 0;
+    const pad = BUILDINGS.find((b) => b.kind === 'fuel')!;
+    const drive = Math.abs(pod.col - (pad.col + pad.width / 2));
+    const driveTime = drive / (PHYSICS.maxSpeedX * stats.enginePower);
+    return climbTime * (FUEL.idle + FUEL.thrust) + driveTime * FUEL.idle;
+  }
+
+  private thrustPower(): number {
+    const { stats } = this;
+    return stats.enginePower * (1 - (stats.cargoCount / stats.cargoCapacity) * PHYSICS.fullCargoThrustPenalty);
   }
 
   private onDug(dug: DugTile): void {

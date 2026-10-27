@@ -15,6 +15,7 @@ export class UIScene extends Phaser.Scene {
   joystick!: Joystick;
   private hud!: Hud;
   private panel!: Panel;
+  private glow!: Phaser.GameObjects.Image;
 
   constructor() {
     super('ui');
@@ -30,6 +31,7 @@ export class UIScene extends Phaser.Scene {
     this.hud = new Hud(this);
     this.panel = new Panel(this);
     this.makePauseButton();
+    this.makeGlow();
 
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => (this.panel.open ? this.panel.cancel() : this.gameScene.pause()));
@@ -49,10 +51,29 @@ export class UIScene extends Phaser.Scene {
     this.scale.on('resize', layout);
   }
 
+  // Red glow around the screen edges, pulsing while fuel is critical.
+  private makeGlow(): void {
+    const size = 64;
+    const tex = this.textures.createCanvas('glow', size, size)!;
+    const ctx = tex.getContext();
+    const grad = ctx.createRadialGradient(size / 2, size / 2, size * 0.4, size / 2, size / 2, size * 0.62);
+    grad.addColorStop(0, 'rgba(255,40,40,0)');
+    grad.addColorStop(1, 'rgba(255,40,40,0.6)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    tex.refresh();
+    tex.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    this.glow = this.add.image(0, 0, 'glow').setOrigin(0).setDepth(-1).setVisible(false);
+    const layout = () => this.glow.setDisplaySize(this.scale.width, this.scale.height);
+    layout();
+    this.scale.on('resize', layout);
+  }
+
   update(time: number, delta: number): void {
-    const { pod, world, stats } = this.gameScene;
+    const { pod, world, stats, fuelMark, fuelState } = this.gameScene;
     const depth = Math.max(0, pod.row - world.surfaceRow + 1);
-    this.hud.update(stats, depth * METRES_PER_TILE, time, delta / 1000);
+    this.hud.update(stats, fuelMark, fuelState, depth * METRES_PER_TILE, time, delta / 1000);
+    this.glow.setVisible(fuelState === 'critical').setAlpha(0.7 + 0.3 * Math.sin(time / 180));
   }
 
   toast(message: string, color?: number, hold?: number): void {

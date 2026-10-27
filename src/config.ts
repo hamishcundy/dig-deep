@@ -66,7 +66,10 @@ export const FUEL = {
   idle: 0.06, // litres/s, always while the engine runs
   thrust: 0.12, // extra litres/s while thrusting
   drill: 0.15, // extra litres/s while drilling
-  lowWarning: 0.25, // share of the tank where the gauge turns red
+  // Fuel to get home: the straight climb and drive to the fuel pad, times homeMargin,
+  // plus homeBuffer litres for finding the way. Below it the gauge warns.
+  homeMargin: 1.5,
+  homeBuffer: 1, // litres
   minSnapshot: 1, // litres; the surface save point isn't updated with less than this
 };
 
