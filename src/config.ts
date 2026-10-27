@@ -31,7 +31,7 @@ export const PHYSICS = {
   airDrag: 3, // tiles/s², slowdown with no input in the air
   cornerNudge: 0.5, // tiles; how far the pod slides to line up with a shaft above
   cornerNudgeSpeed: 6, // tiles/s
-  cargoThrustPenalty: 0.03, // thrust lost per item in the cargo bay (0.03 = 3%)
+  fullCargoThrustPenalty: 0.3, // thrust lost with a full cargo bay (0.3 = 30%), scaled by how full it is
 };
 
 export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo';

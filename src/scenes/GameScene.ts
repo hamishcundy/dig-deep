@@ -107,7 +107,7 @@ export class GameScene extends Phaser.Scene {
   private step(dt: number): void {
     const { pod, stats, world } = this;
     const power = {
-      thrust: stats.enginePower * (1 - stats.cargoCount * PHYSICS.cargoThrustPenalty),
+      thrust: stats.enginePower * (1 - (stats.cargoCount / stats.cargoCapacity) * PHYSICS.fullCargoThrustPenalty),
       speed: stats.enginePower,
       drill: stats.drillSpeed,
     };
