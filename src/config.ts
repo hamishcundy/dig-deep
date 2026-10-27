@@ -1,0 +1,67 @@
+// All tuning numbers live here. Distances are in tiles, times in seconds,
+// unless the name says otherwise.
+
+export const TILE = 32; // px per tile
+
+export const WORLD = {
+  width: 36, // tiles across
+  depth: 300, // diggable rows below the surface
+  skyRows: 8, // open rows above the surface
+};
+
+export const VIEW = {
+  minTilesAcross: 11, // tiles visible across the shorter screen side
+};
+
+export const METRES_PER_TILE = 2;
+
+export const POD = {
+  width: 0.8,
+  height: 0.75,
+};
+
+export const PHYSICS = {
+  gravity: 20, // tiles/s²
+  thrust: 34, // tiles/s², upward, applied against gravity
+  maxRise: 8, // tiles/s
+  maxFall: 20, // tiles/s
+  accel: 28, // tiles/s², horizontal
+  maxSpeedX: 6, // tiles/s
+  groundFriction: 24, // tiles/s², slowdown with no input on the ground
+  airDrag: 3, // tiles/s², slowdown with no input in the air
+  cornerNudge: 0.5, // tiles; how far the pod slides to line up with a shaft above
+  cornerNudgeSpeed: 6, // tiles/s
+};
+
+export const DRILL = {
+  baseTime: 0.35, // seconds to drill one dirt tile at the surface
+  depthHardness: 1 / 150, // +100% drill time every 150 rows
+  oreTimeFactor: 1.2,
+  speed: 1, // multiplier; drill upgrades raise this
+};
+
+export interface OreDef {
+  name: string;
+  price: number;
+  minDepth: number; // rows below the surface
+  weight: number; // relative spawn weight once unlocked
+  color: number;
+}
+
+export const ORES: OreDef[] = [
+  { name: 'Copper', price: 30, minDepth: 1, weight: 10, color: 0xc87533 },
+  { name: 'Iron', price: 60, minDepth: 10, weight: 8, color: 0xa9a29a },
+  { name: 'Silver', price: 100, minDepth: 30, weight: 6, color: 0xe8eef2 },
+  { name: 'Gold', price: 250, minDepth: 60, weight: 5, color: 0xffcf33 },
+  { name: 'Platinum', price: 750, minDepth: 100, weight: 4, color: 0xa8e6ff },
+  { name: 'Emerald', price: 2000, minDepth: 150, weight: 3, color: 0x2ecc71 },
+  { name: 'Ruby', price: 5000, minDepth: 200, weight: 2, color: 0xe0115f },
+  { name: 'Diamond', price: 20000, minDepth: 250, weight: 1, color: 0xf4fdff },
+];
+
+export const GEN = {
+  oreChance: 0.09, // chance a dirt tile holds ore
+  boulderStartDepth: 15,
+  boulderChanceMax: 0.06,
+  boulderRampDepth: 200, // depth where boulder chance reaches its max
+};
