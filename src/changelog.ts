@@ -9,6 +9,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: 3,
+    title: 'Gorlab',
+    notes: ['Something sleeps at the bottom of the world, 600 m down. Bring dynamite and a repair kit.'],
+  },
+  {
     id: 2,
     title: 'October 2026, update 2',
     notes: ['Earthquakes now start once you have been 100 m down.'],

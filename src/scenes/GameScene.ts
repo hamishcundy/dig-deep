@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
-import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, METRES_PER_TILE, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
+import { Gorlab } from '../boss/Gorlab';
+import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, GORLAB, METRES_PER_TILE, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
+import { clearProgress, loadProgress, saveProgress, type Progress } from '../game/progress';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
 import { Pod, type DugTile, type Stick } from '../pod/Pod';
 import { World } from '../world/World';
 import { Tile, isDrillable, isOre, isSolid, oreIndex } from '../world/tiles';
 import { Darkness } from './Darkness';
+import { GorlabView } from './GorlabView';
 import { PodView } from './PodView';
 import { Surface } from './Surface';
 import { Terrain } from './Terrain';
@@ -45,6 +48,11 @@ export class GameScene extends Phaser.Scene {
   fuelMark = 0; // litres to get home with a margin; drawn as a tick on the fuel gauge
   fuelState: FuelState = 'ok';
   private braking = false; // landing thrusters firing
+  private progress!: Progress;
+  private gorlab: Gorlab | null = null; // null once defeated
+  private gorlabView: GorlabView | null = null;
+  private wentUnderground = false; // since the last surface stop, for counting trips
+  private hurtFxAt = 0; // last time damage flashed and clanked, so steady burns don't spam
 
   constructor() {
     super('game');
@@ -57,7 +65,11 @@ export class GameScene extends Phaser.Scene {
     const save = urlSeed === null ? loadSave() : null;
     this.world = new World(save?.seed ?? urlSeed ?? Math.floor(Math.random() * 1e9));
     const resumed = save !== null && save.cells.length === this.world.cells.length;
-    if (resumed) this.world.cells.set(save.cells);
+    if (resumed) {
+      this.world.cells.set(save.cells);
+      this.world.carveCavern(); // saves from before Gorlab's cavern existed
+    }
+    this.progress = loadProgress(this.world.seed);
     this.stats = resumed ? save.stats : new PodStats();
     console.log(`seed ${this.world.seed} (add ?seed=${this.world.seed} to the URL to replay this world)`);
 
@@ -69,6 +81,10 @@ export class GameScene extends Phaser.Scene {
     this.pod = new Pod(this.world, resumed ? save.col : SPAWN_COL, surfaceRow - 1);
     this.usedPad = padAt(this.pod.col); // don't pop a building open on load
     this.podView = new PodView(this, this.pod);
+    if (!this.progress.gorlabDefeated) {
+      this.gorlab = new Gorlab(this.world.cavern, this.progress.gorlabHits);
+      this.gorlabView = new GorlabView(this, this.gorlab);
+    }
     this.darkness = new Darkness(this);
     this.takeSnapshot();
 
@@ -107,6 +123,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
+    this.gorlabView?.update(dt);
     this.surface.update(dt);
     this.darkness.update(dt, this.pod, this.world.depthOf(this.pod.row));
   }
@@ -126,6 +143,9 @@ export class GameScene extends Phaser.Scene {
     const dug = pod.update(dt, stick, power);
     if (dug) this.onDug(dug);
     stats.deepest = Math.max(stats.deepest, world.depthOf(pod.row));
+    this.progress.playTime += dt;
+    if (pod.row >= world.surfaceRow) this.wentUnderground = true;
+    if (this.gorlab && this.updateGorlab(dt)) return; // destroyed by it
 
     stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
     if (this.braking) pod.thrusting = true; // show the flame; the thrusters burn their own fuel
@@ -139,20 +159,14 @@ export class GameScene extends Phaser.Scene {
       this.podView.landed(impact);
       sound.land(impact);
     }
-    if (impact > FALL.safeSpeed) {
-      const damage = (impact - FALL.safeSpeed) * FALL.damagePerSpeed;
-      stats.hull -= damage;
-      this.podView.hit();
-      sound.clank();
-      this.cameras.main.shake(150, 0.004 + damage * 0.002);
-      if (stats.hull <= 0) {
-        stats.hull = 0;
-        return this.die('Hull destroyed');
-      }
-    }
+    if (impact > FALL.safeSpeed && this.damagePod((impact - FALL.safeSpeed) * FALL.damagePerSpeed, 'Hull destroyed')) return;
 
     const atSurface = pod.grounded && !pod.drill && pod.row === world.surfaceRow - 1;
-    if (atSurface && !this.wasAtSurface) this.takeSnapshot();
+    if (atSurface && !this.wasAtSurface) {
+      if (this.wentUnderground) this.progress.trips++;
+      this.wentUnderground = false;
+      this.takeSnapshot();
+    }
     this.wasAtSurface = atSurface;
 
     // Open a building when the pod stops on its pad (driving across doesn't count).
@@ -195,6 +209,64 @@ export class GameScene extends Phaser.Scene {
     const drive = Math.abs(pod.col - (pad.col + pad.width / 2));
     const driveTime = drive / (PHYSICS.maxSpeedX * stats.enginePower);
     return climbTime * (FUEL.idle + FUEL.thrust) + driveTime * FUEL.idle;
+  }
+
+  // Takes hull off the pod; returns true if that destroyed it. Steady damage
+  // (fire, contact) only flashes and clanks a few times a second.
+  private damagePod(amount: number, reason: string): boolean {
+    const { stats } = this;
+    stats.hull -= amount;
+    const now = this.time.now;
+    if (amount >= 1 || now - this.hurtFxAt > 250) {
+      this.hurtFxAt = now;
+      this.podView.hit();
+      sound.clank();
+      this.cameras.main.shake(150, 0.004 + Math.min(amount, 10) * 0.002);
+    }
+    if (stats.hull > 0) return false;
+    stats.hull = 0;
+    this.die(reason);
+    return true;
+  }
+
+  // Returns true if Gorlab destroyed the pod.
+  private updateGorlab(dt: number): boolean {
+    const frame = this.gorlab!.update(dt, this.pod);
+    if (frame.woke) {
+      sound.roar();
+      this.cameras.main.shake(700, 0.012);
+      this.ui.toast('Gorlab has woken!', 0xff6a1a, 2000);
+    }
+    if (frame.started === 'breath') sound.breath();
+    if (frame.started === 'tail') {
+      sound.tailSwipe();
+      this.gorlabView!.tailSwipe();
+    }
+    if (frame.knock) this.pod.vx = frame.knock;
+    return frame.damage > 0 && this.damagePod(frame.damage, 'Destroyed by Gorlab');
+  }
+
+  private onGorlabBlast(result: 'hit' | 'defeated'): void {
+    const g = this.gorlab!;
+    this.progress.gorlabHits = g.hits;
+    if (result === 'hit') {
+      this.gorlabView!.hit();
+      sound.roar();
+      this.ui.toast(`Gorlab hit! ${g.hits} of ${GORLAB.hits}`, 0xffb43b, 1500);
+    } else {
+      this.progress.gorlabDefeated = true;
+      this.gorlabView!.defeat();
+      sound.gorlabDefeat();
+      this.cameras.main.shake(2000, 0.015);
+      this.stats.money += GORLAB.reward;
+      this.time.delayedCall(2600, () => {
+        this.mode = 'menu';
+        this.pod.thrusting = false;
+        const { playTime, trips, deaths } = this.progress;
+        this.ui.showEnding({ reward: GORLAB.reward, playTime, trips, deaths });
+      });
+    }
+    saveProgress(this.progress);
   }
 
   // Landing thrusters fire by themselves on a big drop: when the pod would hit the
@@ -293,6 +365,8 @@ export class GameScene extends Phaser.Scene {
     }
     pod.drill = null; // whatever it was drilling is gone
     pod.grounded = false;
+    const result = this.gorlab?.blast(pod.x + pod.w / 2, pod.y + pod.h / 2);
+    if (result) this.onGorlabBlast(result);
     this.cameras.main.shake(300, 0.012);
     sound.boom();
   }
@@ -374,6 +448,8 @@ export class GameScene extends Phaser.Scene {
 
   private die(reason: string): void {
     this.mode = 'dead';
+    this.progress.deaths++;
+    saveProgress(this.progress);
     this.pod.thrusting = false;
     this.cameras.main.shake(300, 0.012);
     sound.crash();
@@ -388,11 +464,14 @@ export class GameScene extends Phaser.Scene {
     this.pod.placeAt(snapshot.col, world.surfaceRow - 1);
     this.wasAtSurface = true;
     this.usedPad = padAt(snapshot.col);
+    this.wentUnderground = false;
+    this.gorlab?.sleep(); // its wounds stay
     this.mode = 'play';
   }
 
   newGame(): void {
     clearSave();
+    clearProgress();
     const url = new URL(location.href);
     url.searchParams.delete('seed');
     location.href = url.toString();
@@ -402,6 +481,7 @@ export class GameScene extends Phaser.Scene {
     if (this.stats.fuel < FUEL.minSnapshot) return; // never roll back to a spot you can't leave
     this.snapshot = { cells: this.world.cells.slice(), stats: this.stats.clone(), col: this.pod.col };
     writeSave({ seed: this.world.seed, ...this.snapshot });
+    saveProgress(this.progress);
   }
 
 }

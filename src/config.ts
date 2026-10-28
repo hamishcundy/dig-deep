@@ -110,6 +110,23 @@ export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
 // Earthquakes (after Motherload): a chance each time the pod leaves a building,
 // once the pod has been deep enough. There's no warning. The ground below the surface splits into thin
 // layers that each slide a tile left, right or not at all, breaking old shafts.
+// Gorlab: the creature asleep in a cavern at the bottom of every world. Entering
+// the cavern wakes it; enough dynamite blasts beside it win the game.
+export const GORLAB = {
+  cavernWidth: 26, // tiles
+  cavernHeight: 12, // tiles, open down to the bedrock floor
+  hits: 5, // dynamite blasts to defeat it; damage stays between trips
+  hitRange: 2, // tiles from its body that a blast still hurts it
+  body: { width: 2.3, height: 3.3 }, // tiles; the part that hurts to touch and takes hits
+  turnDelay: 1.5, // seconds the pod must stay behind it before it turns round
+  contactDps: 5, // hull per second while touching it
+  // Fire breath: rears up (windup), then breathes a cone at where the pod was.
+  breath: { interval: 3.5, windup: 0.8, duration: 1.2, length: 7, halfAngle: 0.4, dps: 8 },
+  // Tail swipe: hits a pod close behind it, along the floor, and knocks it away.
+  tail: { interval: 2.5, windup: 0.5, reach: 4, height: 2.5, damage: 10, knock: 12 },
+  reward: 500000,
+};
+
 export const EARTHQUAKE = {
   chance: 1 / 20, // per building left
   minDepth: 100, // metres; first reaching this starts them, so brand new players learn the basics first

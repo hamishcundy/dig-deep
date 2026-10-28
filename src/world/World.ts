@@ -1,4 +1,4 @@
-import { BUILDINGS, GEN, ORES, WORLD } from '../config';
+import { BUILDINGS, GEN, GORLAB, ORES, WORLD } from '../config';
 import { Tile, oreTile } from './tiles';
 
 // Small, fast seeded RNG (mulberry32) so a seed always builds the same world.
@@ -13,14 +13,26 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+// Gorlab's cavern, in tiles: columns c0..c1 and rows r0..r1 inclusive.
+export interface Cavern {
+  c0: number;
+  c1: number;
+  r0: number;
+  r1: number;
+}
+
 export class World {
   readonly cols = WORLD.width;
   readonly surfaceRow = WORLD.skyRows;
   readonly rows = WORLD.skyRows + WORLD.depth + 1; // +1 bedrock floor
   readonly cells: Uint8Array;
+  readonly cavern: Cavern;
 
   constructor(readonly seed: number) {
     this.cells = new Uint8Array(this.cols * this.rows);
+    const c0 = Math.floor((this.cols - GORLAB.cavernWidth) / 2);
+    const r1 = this.rows - 2; // just above the bedrock floor
+    this.cavern = { c0, c1: c0 + GORLAB.cavernWidth - 1, r0: r1 - GORLAB.cavernHeight + 1, r1 };
     this.generate();
   }
 
@@ -39,11 +51,27 @@ export class World {
     return row - this.surfaceRow;
   }
 
+  // Open Gorlab's cavern: a dome with a flat floor on the bedrock, its edge a
+  // little ragged. Also run on loaded saves from before the cavern existed.
+  carveCavern(): void {
+    const { c0, c1, r0, r1 } = this.cavern;
+    const cx = (c0 + c1) / 2;
+    const halfW = (c1 - c0) / 2;
+    const h = r1 - r0 + 1;
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const ragged = 1 + 0.12 * Math.sin(c * 1.3 + r * 0.7);
+        if (((c - cx) / halfW) ** 2 + ((r1 + 0.5 - r) / h) ** 2 < ragged) this.set(c, r, Tile.Empty);
+      }
+    }
+  }
+
   // Earthquake: split the ground below the surface into layers of layerMin-layerMax
   // rows and slide each one a tile left, right or not at all. The column that
   // opens at one edge gets fresh ground; the one pushed off the other edge is lost.
+  // Gorlab's cavern and everything below it stay put.
   quake(layerMin: number, layerMax: number, rand: () => number = Math.random): void {
-    const floor = this.rows - 1; // bedrock row stays
+    const floor = this.cavern.r0;
     let row = this.surfaceRow + 1;
     while (row < floor) {
       const height = layerMin + Math.floor(rand() * (layerMax - layerMin + 1));
@@ -72,6 +100,7 @@ export class World {
     for (const b of BUILDINGS) {
       for (let col = b.col; col < b.col + b.width; col++) this.set(col, this.surfaceRow, Tile.Pad);
     }
+    this.carveCavern();
   }
 
   private pickTile(depth: number, rand: () => number): number {

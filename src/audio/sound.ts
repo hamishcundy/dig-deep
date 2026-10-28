@@ -241,6 +241,35 @@ class Sound {
     this.tone(90, 0.5, { type: 'sawtooth', gain: 0.15, to: 40 });
   }
 
+  // Gorlab: a roar when it wakes or is hit.
+  roar(): void {
+    if (!this.ready) return;
+    this.tone(110, 1.1, { type: 'sawtooth', gain: 0.35, to: 55 });
+    this.tone(165, 0.9, { type: 'sawtooth', gain: 0.2, to: 70, at: 0.05 });
+    this.noise(1, { filter: 'bandpass', freq: 400, to: 150, gain: 0.6 });
+  }
+
+  // Gorlab's fire breath: a long rush of flame.
+  breath(): void {
+    if (!this.ready) return;
+    this.noise(1.3, { filter: 'bandpass', freq: 900, to: 500, gain: 0.7 });
+    this.noise(1.2, { filter: 'lowpass', freq: 300, gain: 0.4 });
+  }
+
+  // Gorlab's tail sweeping the floor.
+  tailSwipe(): void {
+    if (!this.ready) return;
+    this.noise(0.35, { filter: 'bandpass', freq: 300, to: 1400, gain: 0.6 });
+    this.tone(70, 0.3, { type: 'sine', gain: 0.4, to: 40, at: 0.2 });
+  }
+
+  // Gorlab defeated: a falling roar and a long rumble.
+  gorlabDefeat(): void {
+    if (!this.ready) return;
+    this.tone(140, 2.2, { type: 'sawtooth', gain: 0.35, to: 35 });
+    this.noise(2.5, { filter: 'lowpass', freq: 1200, to: 60, gain: 0.9 });
+  }
+
   // Earthquake: a long, deep rumble.
   quake(): void {
     if (!this.ready) return;

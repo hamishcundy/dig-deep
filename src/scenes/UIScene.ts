@@ -324,6 +324,26 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
+  // After Gorlab falls: what the run took, then carry on in the same world or start again.
+  showEnding(summary: { reward: number; playTime: number; trips: number; deaths: number }): void {
+    const minutes = Math.round(summary.playTime / 60);
+    const time = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+    this.showPanel({
+      title: 'Gorlab is defeated',
+      lines: [
+        'You reached the bottom of the world and won.',
+        ['Reward', `$${summary.reward.toLocaleString()}`],
+        ['Time played', time],
+        ['Trips down', `${summary.trips}`],
+        ['Pods lost', `${summary.deaths}`],
+      ],
+      buttons: [
+        { label: 'Keep playing', onClick: () => (this.hidePanel(), this.gameScene.resume()) },
+        { label: 'New game', onClick: () => this.confirmNewGame(() => this.showEnding(summary)) },
+      ],
+    });
+  }
+
   showDeath(reason: string): void {
     const game = this.gameScene;
     this.showPanel({
