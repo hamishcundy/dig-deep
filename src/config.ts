@@ -112,7 +112,7 @@ export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
 // layers that each slide a tile left, right or not at all, breaking old shafts.
 export const EARTHQUAKE = {
   chance: 1 / 20, // per building left
-  minEarned: 150000, // lifetime sales before they start
+  minEarned: 5000, // lifetime sales before they start: past the first few trips, so new players learn the basics first
   layerMin: 3, // rows per layer
   layerMax: 5,
 };
