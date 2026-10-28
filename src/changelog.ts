@@ -11,7 +11,7 @@ export const RELEASES: Release[] = [
   {
     id: 2,
     title: 'October 2026, update 2',
-    notes: ['Earthquakes now start after $5,000 earned, not $150,000.'],
+    notes: ['Earthquakes now start once you have been 100 m down.'],
   },
   {
     id: 1,
@@ -19,7 +19,7 @@ export const RELEASES: Release[] = [
     notes: [
       'Items: reserve fuel, repair kit, dynamite, teleport and landing thrusters. Buy them at the repair shop.',
       'Item slots: start with 1, buy more in the shop.',
-      'Earthquakes: after $5,000 earned, leaving a building can shift the tunnels.',
+      'Earthquakes: once you have been 100 m down, leaving a building can shift the tunnels.',
       'Fuel gauge: the tick shows the fuel you need to get home.',
       'New ore and rock art, and sound.',
       'Install it to your home screen from the title screen.',

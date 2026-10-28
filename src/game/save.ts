@@ -22,7 +22,7 @@ export function loadSave(): SaveData | null {
     if (o.v !== VERSION) return null;
     const stats = new PodStats();
     stats.money = o.stats.money;
-    stats.earned = o.stats.earned ?? 0;
+    stats.deepest = o.stats.deepest ?? 0;
     stats.fuel = o.stats.fuel;
     stats.hull = o.stats.hull;
     stats.cargo = o.stats.cargo;
@@ -35,11 +35,11 @@ export function loadSave(): SaveData | null {
 }
 
 export function writeSave(data: SaveData): void {
-  const { money, earned, fuel, hull, cargo, levels, items } = data.stats;
+  const { money, deepest, fuel, hull, cargo, levels, items } = data.stats;
   try {
     localStorage.setItem(
       KEY,
-      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, earned, fuel, hull, cargo, levels, items }, col: data.col }),
+      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, deepest, fuel, hull, cargo, levels, items }, col: data.col }),
     );
   } catch {
     // storage full or blocked (e.g. private browsing): play on without saving

@@ -108,11 +108,11 @@ export const ITEM_REFILL_MARKUP = 5; // a refill costs this many times a full fi
 export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
 
 // Earthquakes (after Motherload): a chance each time the pod leaves a building,
-// once enough has been earned. The ground below the surface splits into thin
+// once the pod has been deep enough. There's no warning. The ground below the surface splits into thin
 // layers that each slide a tile left, right or not at all, breaking old shafts.
 export const EARTHQUAKE = {
   chance: 1 / 20, // per building left
-  minEarned: 5000, // lifetime sales before they start: past the first few trips, so new players learn the basics first
+  minDepth: 100, // metres; first reaching this starts them, so brand new players learn the basics first
   layerMin: 3, // rows per layer
   layerMax: 5,
 };

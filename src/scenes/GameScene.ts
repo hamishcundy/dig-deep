@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
-import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
+import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, METRES_PER_TILE, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
@@ -125,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.updateLandingThrusters(dt, stick, power.thrust);
     const dug = pod.update(dt, stick, power);
     if (dug) this.onDug(dug);
+    stats.deepest = Math.max(stats.deepest, world.depthOf(pod.row));
 
     stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
     if (this.braking) pod.thrusting = true; // show the flame; the thrusters burn their own fuel
@@ -354,10 +355,11 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'play';
   }
 
-  // Leaving a building. Once enough has been earned, this can set off an earthquake.
+  // Leaving a building. Once the pod has been deep enough, this can set off an earthquake.
   closeMenu(): void {
     this.mode = 'play';
-    if (this.stats.earned >= EARTHQUAKE.minEarned && Math.random() < EARTHQUAKE.chance) this.earthquake();
+    const deepEnough = this.stats.deepest * METRES_PER_TILE >= EARTHQUAKE.minDepth;
+    if (deepEnough && Math.random() < EARTHQUAKE.chance) this.earthquake();
     this.takeSnapshot();
   }
 
