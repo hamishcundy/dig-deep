@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
-import { BUILDINGS, DYNAMITE_RADIUS, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
+import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
@@ -354,9 +354,20 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'play';
   }
 
+  // Leaving a building. Once enough has been earned, this can set off an earthquake.
   closeMenu(): void {
     this.mode = 'play';
+    if (this.stats.earned >= EARTHQUAKE.minEarned && Math.random() < EARTHQUAKE.chance) this.earthquake();
     this.takeSnapshot();
+  }
+
+  // Only ever at the surface (the pod is on a pad), so the pod is never inside shifting ground.
+  earthquake(): void {
+    this.world.quake(EARTHQUAKE.layerMin, EARTHQUAKE.layerMax);
+    this.terrain.redrawAll();
+    this.cameras.main.shake(1400, 0.02);
+    sound.quake();
+    this.ui.earthquake();
   }
 
   private die(reason: string): void {

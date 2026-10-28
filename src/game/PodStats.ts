@@ -4,6 +4,7 @@ import { ECONOMY, ITEM_REFILL_MARKUP, ITEMS, ORES, UPGRADE_PRICES, UPGRADES, typ
 export class PodStats {
   levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0, slots: 0 };
   money = ECONOMY.startMoney;
+  earned = 0; // lifetime sales; earthquakes start once this is high enough
   fuel = this.value('fuel');
   hull = this.value('hull');
   cargo: number[] = ORES.map(() => 0); // count per ore
@@ -110,6 +111,7 @@ export class PodStats {
   sellAll(): number {
     const value = this.cargoValue;
     this.money += value;
+    this.earned += value;
     this.cargo.fill(0);
     return value;
   }
@@ -118,6 +120,7 @@ export class PodStats {
     const copy = new PodStats();
     copy.levels = { ...this.levels };
     copy.money = this.money;
+    copy.earned = this.earned;
     copy.fuel = this.fuel;
     copy.hull = this.hull;
     copy.cargo = [...this.cargo];

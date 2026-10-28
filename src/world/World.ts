@@ -39,6 +39,28 @@ export class World {
     return row - this.surfaceRow;
   }
 
+  // Earthquake: split the ground below the surface into layers of layerMin-layerMax
+  // rows and slide each one a tile left, right or not at all. The column that
+  // opens at one edge gets fresh ground; the one pushed off the other edge is lost.
+  quake(layerMin: number, layerMax: number, rand: () => number = Math.random): void {
+    const floor = this.rows - 1; // bedrock row stays
+    let row = this.surfaceRow + 1;
+    while (row < floor) {
+      const height = layerMin + Math.floor(rand() * (layerMax - layerMin + 1));
+      const shift = Math.floor(rand() * 3) - 1;
+      for (let r = row; r < Math.min(floor, row + height); r++) if (shift !== 0) this.shiftRow(r, shift, rand);
+      row += height;
+    }
+  }
+
+  private shiftRow(row: number, shift: number, rand: () => number): void {
+    const old = this.cells.slice(row * this.cols, (row + 1) * this.cols);
+    for (let col = 0; col < this.cols; col++) {
+      const from = col - shift;
+      this.set(col, row, from >= 0 && from < this.cols ? old[from] : this.pickTile(this.depthOf(row), rand));
+    }
+  }
+
   private generate(): void {
     const rand = mulberry32(this.seed);
     for (let row = this.surfaceRow; row < this.rows; row++) {

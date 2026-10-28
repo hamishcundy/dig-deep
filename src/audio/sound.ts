@@ -241,6 +241,14 @@ class Sound {
     this.tone(90, 0.5, { type: 'sawtooth', gain: 0.15, to: 40 });
   }
 
+  // Earthquake: a long, deep rumble.
+  quake(): void {
+    if (!this.ready) return;
+    this.noise(1.6, { filter: 'lowpass', freq: 260, to: 70, gain: 1 });
+    this.tone(45, 1.4, { type: 'sine', gain: 0.5, to: 30 });
+    this.noise(0.5, { filter: 'lowpass', freq: 900, to: 120, gain: 0.5, at: 0.2 });
+  }
+
   // Dynamite.
   boom(): void {
     if (!this.ready) return;

@@ -107,6 +107,16 @@ export const MAX_ITEM_SLOTS = UPGRADES.slots.values[UPGRADES.slots.values.length
 export const ITEM_REFILL_MARKUP = 5; // a refill costs this many times a full fill or repair at the surface
 export const DYNAMITE_RADIUS = 1; // tiles each way from the pod: 1 clears 3x3
 
+// Earthquakes (after Motherload): a chance each time the pod leaves a building,
+// once enough has been earned. The ground below the surface splits into thin
+// layers that each slide a tile left, right or not at all, breaking old shafts.
+export const EARTHQUAKE = {
+  chance: 1 / 20, // per building left
+  minEarned: 150000, // lifetime sales before they start
+  layerMin: 3, // rows per layer
+  layerMax: 5,
+};
+
 export type BuildingKind = 'fuel' | 'sell' | 'repair' | 'shop';
 
 export interface BuildingDef {

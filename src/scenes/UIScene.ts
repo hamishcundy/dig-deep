@@ -4,8 +4,10 @@ import { sound } from '../audio/sound';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
 import { ItemBar } from '../ui/ItemBar';
+import { markReleasesSeen, RELEASES, unseenReleases, type Release } from '../changelog';
 import { installOption, onInstallChange, showInstallPrompt } from '../pwa';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
+import { textStyle } from '../ui/theme';
 import type { GameScene } from './GameScene';
 
 const PAUSED = 'Paused';
@@ -18,6 +20,7 @@ export class UIScene extends Phaser.Scene {
   private panel!: Panel;
   private glow!: Phaser.GameObjects.Image;
   private itemBar!: ItemBar;
+  private checkedWhatsNew = false;
 
   constructor() {
     super('ui');
@@ -79,6 +82,21 @@ export class UIScene extends Phaser.Scene {
     this.hud.update(stats, fuelMark, fuelState, depth * METRES_PER_TILE, time, delta / 1000);
     this.itemBar.update(stats.items, stats.itemSlots);
     this.glow.setVisible(fuelState === 'critical').setAlpha(0.7 + 0.3 * Math.sin(time / 180));
+  }
+
+  // A big flashing "!" and a message, while the game camera shakes.
+  earthquake(): void {
+    const { width, height } = this.scale;
+    const mark = this.add.text(width / 2, height / 2 - 40, '!', textStyle(160, '#ff3b3b')).setOrigin(0.5).setStroke('#ffffff', 10).setDepth(90);
+    this.tweens.add({
+      targets: mark,
+      alpha: { from: 1, to: 0.15 },
+      duration: 160,
+      yoyo: true,
+      repeat: 4,
+      onComplete: () => mark.destroy(),
+    });
+    this.toast('Earthquake! Tunnels shifted', 0xff6b6b, 2500);
   }
 
   toast(message: string, color?: number, hold?: number): void {
@@ -219,6 +237,13 @@ export class UIScene extends Phaser.Scene {
 
   // Shown on load, over the surface. Enter or the first button starts play.
   showTitle(resumed: boolean): void {
+    // After an update, a returning player sees what's new first (once per load).
+    if (!this.checkedWhatsNew) {
+      this.checkedWhatsNew = true;
+      const unseen = unseenReleases(resumed);
+      markReleasesSeen();
+      if (unseen.length) return this.showWhatsNew(unseen, () => this.showTitle(resumed));
+    }
     const play = () => {
       this.hidePanel();
       this.gameScene.startPlaying();
@@ -234,6 +259,7 @@ export class UIScene extends Phaser.Scene {
       buttons: [
         { label: resumed ? 'Continue' : 'Play', onClick: play },
         { label: 'How to play', onClick: () => this.showHowTo(back) },
+        ...(resumed ? [{ label: "What's new", onClick: () => this.showWhatsNew(RELEASES.slice(0, 3), back) }] : []),
         ...(resumed ? [{ label: 'New game', onClick: () => this.confirmNewGame(back) }] : []),
         this.soundButton(back),
         ...(install === 'prompt' ? [{ label: 'Install app', onClick: () => showInstallPrompt() }] : []),
@@ -251,6 +277,17 @@ export class UIScene extends Phaser.Scene {
     this.showPanel({
       title: 'Install app',
       lines: ['Tap Share in your browser', '(in Safari it may be under ···),', 'then Add to Home Screen.'],
+      buttons: [{ label: 'Got it', onClick: back }],
+      onCancel: back,
+    });
+  }
+
+  // Release notes, newest first. With more than one release, each gets its title.
+  private showWhatsNew(releases: Release[], back: () => void): void {
+    const lines = releases.flatMap((r) => [...(releases.length > 1 ? [r.title] : []), ...r.notes.map((n) => `- ${n}`)]);
+    this.showPanel({
+      title: "What's new",
+      lines,
       buttons: [{ label: 'Got it', onClick: back }],
       onCancel: back,
     });

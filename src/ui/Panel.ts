@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
-import { textStyle } from './theme';
+import { FONT, textStyle } from './theme';
 
 export interface PanelButton {
   label: string;
@@ -12,7 +12,7 @@ export interface PanelButton {
 
 export interface PanelSpec {
   title: string;
-  lines: (string | [string, string])[]; // a pair is a label and a right-aligned value
+  lines: (string | [string, string])[]; // a pair is a label and a right-aligned value; long strings wrap
   buttons: PanelButton[];
   onCancel?: () => void; // Esc
   plain?: boolean; // no highlighted button, and Enter does nothing
@@ -58,7 +58,8 @@ export class Panel {
     const { width, height } = s.scale;
     const pw = Math.min(360, width - 32);
     const titleH = spec.big ? 64 : 38;
-    const ph = PAD * 2 + titleH + spec.lines.length * LINE_H + GAP + spec.buttons.length * (BUTTON_H + GAP);
+    const lines = spec.lines.flatMap((line): PanelSpec['lines'] => (typeof line === 'string' ? wrap(line, pw - PAD * 2) : [line]));
+    const ph = PAD * 2 + titleH + lines.length * LINE_H + GAP + spec.buttons.length * (BUTTON_H + GAP);
 
     // Content is laid out from the panel's top-left, then scaled down if the screen is short (phone landscape).
     const content: Phaser.GameObjects.GameObject[] = [
@@ -69,7 +70,7 @@ export class Panel {
     ];
 
     let y = PAD + titleH;
-    for (const line of spec.lines) {
+    for (const line of lines) {
       const [left, right] = typeof line === 'string' ? [line, ''] : line;
       content.push(s.add.text(PAD, y, left, textStyle(24, '#d6dbe4')));
       if (right) content.push(s.add.text(pw - PAD, y, right, textStyle(24)).setOrigin(1, 0));
@@ -112,4 +113,23 @@ export class Panel {
 function press(onClick: () => void): void {
   sound.tick();
   onClick();
+}
+
+// Split a line into lines that fit `width` px at the panel's text size. A line
+// starting with "- " is a bullet: its continuation lines are indented to match.
+const measure = document.createElement('canvas').getContext('2d')!;
+function wrap(text: string, width: number): string[] {
+  measure.font = `24px ${FONT}`;
+  const indent = text.startsWith('- ') ? '  ' : '';
+  const out: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && measure.measureText(next).width > width) {
+      out.push(line);
+      line = indent + word;
+    } else line = next;
+  }
+  if (line) out.push(line);
+  return out;
 }
