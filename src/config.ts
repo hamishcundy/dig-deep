@@ -128,7 +128,7 @@ export const GORLAB = {
 };
 
 export const EARTHQUAKE = {
-  chance: 1 / 20, // per building left
+  chance: 1 / 40, // per building left
   minDepth: 100, // metres; first reaching this starts them, so brand new players learn the basics first
   layerMin: 3, // rows per layer
   layerMax: 5,
