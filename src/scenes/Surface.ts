@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BUILDINGS, TILE, type BuildingDef, type BuildingKind } from '../config';
+import { BUILDINGS, SKY, TILE, type BuildingDef, type BuildingKind } from '../config';
 import { textStyle } from '../ui/theme';
 import { mulberry32, World } from '../world/World';
 
@@ -24,16 +24,39 @@ export class Surface {
     const rand = mulberry32(world.seed ^ 0x5a5a);
 
     // Sky gradient, lighter toward the horizon.
-    const sky = scene.textures.createCanvas('sky', 4, skyH)!;
+    const lowH = SKY.lockedRows * TILE;
+    const lowY = skyH - lowH;
+    const sky = scene.textures.createCanvas('sky', 4, lowH)!;
     const sctx = sky.getContext();
-    const grad = sctx.createLinearGradient(0, 0, 0, skyH);
+    const grad = sctx.createLinearGradient(0, 0, 0, lowH);
     grad.addColorStop(0, '#3f8fd4');
     grad.addColorStop(0.7, '#8ccbee');
     grad.addColorStop(1, '#cdeef8');
     sctx.fillStyle = grad;
-    sctx.fillRect(0, 0, 4, skyH);
+    sctx.fillRect(0, 0, 4, lowH);
     sky.refresh();
-    scene.add.image(0, 0, 'sky').setOrigin(0, 0).setDisplaySize(this.width, skyH);
+    scene.add.image(0, lowY, 'sky').setOrigin(0, 0).setDisplaySize(this.width, lowH);
+
+    // The high sky, darkening to night at the top. A small texture stretched to fit,
+    // since phones can't hold one this tall.
+    const high = scene.textures.createCanvas('sky-high', 4, 1024)!;
+    const hctx = high.getContext();
+    const highGrad = hctx.createLinearGradient(0, 0, 0, 1024);
+    highGrad.addColorStop(0, '#060a24');
+    highGrad.addColorStop(0.35, '#16307a');
+    highGrad.addColorStop(1, '#3f8fd4');
+    hctx.fillStyle = highGrad;
+    hctx.fillRect(0, 0, 4, 1024);
+    high.refresh();
+    scene.add.image(0, 0, 'sky-high').setOrigin(0, 0).setDisplaySize(this.width, lowY);
+
+    // Stars, more of them higher up.
+    const stars = scene.add.graphics();
+    for (let i = 0; i < 260; i++) {
+      const up = rand() * rand();
+      stars.fillStyle(0xffffff, 0.3 + (1 - up) * 0.6);
+      stars.fillRect(rand() * this.width, up * lowY * 0.6, 1 + Math.floor(rand() * 2), 1 + Math.floor(rand() * 2));
+    }
 
     // Sun with a soft glow.
     const sun = scene.add.graphics().setScrollFactor(0.3, 1);
@@ -43,13 +66,13 @@ export class Surface {
     sun.fillCircle(0, 0, 18);
     sun.fillStyle(0xfffbe6, 1);
     sun.fillCircle(0, 0, 12);
-    sun.setPosition(this.width * 0.62, skyH * 0.28);
+    sun.setPosition(this.width * 0.62, lowY + lowH * 0.28);
 
     // Clouds drift slowly and wrap around.
     makeCloudTextures(scene);
     for (let i = 0; i < 6; i++) {
       const img = scene.add
-        .image(rand() * this.width, 18 + rand() * (skyH * 0.45), `cloud${i % 3}`)
+        .image(rand() * this.width, lowY + 18 + rand() * (lowH * 0.45), `cloud${i % 3}`)
         .setScrollFactor(0.5, 1)
         .setAlpha(0.9);
       this.clouds.push({ img, speed: 4 + rand() * 6 });

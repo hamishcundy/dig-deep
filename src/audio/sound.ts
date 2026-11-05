@@ -270,6 +270,19 @@ class Sound {
     this.noise(2.5, { filter: 'lowpass', freq: 1200, to: 60, gain: 0.9 });
   }
 
+  // Sky ore breaking on a hard landing.
+  shatter(): void {
+    if (!this.ready) return;
+    for (const [f, at] of [[2600, 0], [3400, 0.05], [2100, 0.1], [3000, 0.16]]) this.tone(f, 0.12, { type: 'triangle', gain: 0.14, to: f * 0.7, at });
+    this.noise(0.2, { filter: 'highpass', freq: 3000, gain: 0.25 });
+  }
+
+  // Coming off a bounce cloud.
+  bounce(): void {
+    if (!this.ready) return;
+    this.tone(180, 0.28, { type: 'sine', gain: 0.4, to: 620 });
+  }
+
   // Earthquake: a long, deep rumble.
   quake(): void {
     if (!this.ready) return;

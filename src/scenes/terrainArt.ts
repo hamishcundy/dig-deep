@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BANDS, ORES, TILE, type BandDef } from '../config';
 import { mulberry32 } from '../world/World';
+import { Tile, isOre, oreIndex } from '../world/tiles';
 
 // Terrain tileset, drawn in code. One canvas holds every frame; tilemap
 // layers index into it with the helpers below.
@@ -22,10 +23,38 @@ export const Frame = {
   // Transition from band `pair` to the next one down; level 1..3 = 25/50/75% of the deeper band.
   blendDirt: (pair: number, level: number, v: number) => Frame.edge(NB - 1, 15) + 1 + (pair * BLEND_LEVELS + level - 1) * VARIANTS + v,
   blendBack: (pair: number, level: number, v: number) => Frame.blendDirt(NB - 1, 1, 0) + (pair * BLEND_LEVELS + level - 1) * VARIANTS + v,
+  // Sky blocks: a whole puffy tile per style; mask bits as for edges.
+  cloud: (style: number, mask: number, v: number) =>
+    Frame.blendBack(NB - 2, BLEND_LEVELS, VARIANTS - 1) + 1 + (style * 16 + mask) * CLOUD_VARIANTS + v,
 };
 
 export const BLEND_LEVELS = 3;
-const FRAME_COUNT = Frame.blendBack(NB - 2, BLEND_LEVELS, VARIANTS - 1) + 1;
+export const CLOUD_VARIANTS = 2;
+
+// Looks of the sky blocks: highlight, body and shade colours.
+const CLOUD_STYLES = [
+  { hi: '#ffffff', mid: '#e2ebf7', lo: '#aebfdb' }, // cloud, and most sky ore
+  { hi: '#ffb27a', mid: '#c5442a', lo: '#651c18' }, // blast cloud
+  { hi: '#dcfff5', mid: '#7fe3c8', lo: '#379d90' }, // bounce cloud
+  { hi: '#e8decd', mid: '#b6a993', lo: '#786e5f' }, // crumbling cloud
+  { hi: '#8d7fd1', mid: '#4a3f8f', lo: '#2a2360' }, // stardust
+];
+const FRAME_COUNT = Frame.cloud(CLOUD_STYLES.length - 1, 15, CLOUD_VARIANTS - 1) + 1;
+
+// Which cloud style a tile is drawn with, or -1 if it isn't a sky block.
+export function cloudStyle(tile: number): number {
+  if (tile === Tile.Cloud) return 0;
+  if (tile === Tile.Blast) return 1;
+  if (tile === Tile.Bounce) return 2;
+  if (tile === Tile.Crumble) return 3;
+  if (isOre(tile) && ORES[oreIndex(tile)].sky) return ORES[oreIndex(tile)].name === 'Stardust' ? 4 : 0;
+  return -1;
+}
+
+// Colour for particles thrown off a sky block.
+export function cloudColor(style: number): number {
+  return parseInt(CLOUD_STYLES[style].mid.slice(1), 16);
+}
 const GEMS = new Set(['Emerald', 'Ruby', 'Diamond']);
 
 const css = (c: number, a = 1) => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -73,6 +102,13 @@ export function makeTerrainTexture(scene: Phaser.Scene): void {
     tex.add(`ore${i}`, 0, x, y, TILE, TILE); // for HUD icons
   });
   for (let v = 0; v < VARIANTS; v++) drawBoulder(ctx, ...at(Frame.boulder(v)), mulberry32(1500 + v));
+  CLOUD_STYLES.forEach((_, style) => {
+    for (let mask = 0; mask < 16; mask++) {
+      for (let v = 0; v < CLOUD_VARIANTS; v++) {
+        drawCloud(ctx, ...at(Frame.cloud(style, mask, v)), style, mask, mulberry32(2000 + style * 101 + mask * 7 + v));
+      }
+    }
+  });
   tex.refresh();
 }
 
@@ -282,6 +318,86 @@ function drawPad(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.restore();
 }
 
+// One puffy tile of cloud. Open sides (mask bits: 1 top, 2 right, 4 bottom, 8 left)
+// get a scalloped edge inside the tile, with rounded corners where two open sides
+// meet; sides against another block stay flush, so islands read as one mass.
+function drawCloud(ctx: CanvasRenderingContext2D, ox: number, oy: number, style: number, mask: number, rand: () => number) {
+  const { hi, mid, lo } = CLOUD_STYLES[style];
+  const scallop = [0, 1, 2, 3].map(() => {
+    const phase = rand() * Math.PI * 2;
+    const freq = 0.28 + rand() * 0.1; // about a puff and a half per tile
+    return (t: number) => 3 + 2 * Math.sin(t * freq + phase);
+  });
+  const CORNER = 7;
+  const inside = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= TILE || y >= TILE) return false;
+    const [top, right, bottom, left] = [mask & 1, mask & 2, mask & 4, mask & 8];
+    if (top && y < scallop[0](x)) return false;
+    if (right && TILE - 1 - x < scallop[1](y)) return false;
+    if (bottom && TILE - 1 - y < scallop[2](x)) return false;
+    if (left && x < scallop[3](y)) return false;
+    const cx = x < CORNER && left ? CORNER : x >= TILE - CORNER && right ? TILE - CORNER - 1 : null;
+    const cy = y < CORNER && top ? CORNER : y >= TILE - CORNER && bottom ? TILE - CORNER - 1 : null;
+    return cx === null || cy === null || Math.hypot(x - cx, y - cy) <= CORNER;
+  };
+  // An open-side test that treats beyond a closed side as more cloud, for shading.
+  const solid = (x: number, y: number) => {
+    const [cx, cy] = [Math.max(0, Math.min(TILE - 1, x)), Math.max(0, Math.min(TILE - 1, y))];
+    if ((x < 0 && !(mask & 8)) || (x >= TILE && !(mask & 2)) || (y < 0 && !(mask & 1)) || (y >= TILE && !(mask & 4))) return inside(cx, cy);
+    return inside(x, y);
+  };
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      if (!inside(x, y)) continue;
+      let top = false;
+      let under = false;
+      for (let d = 1; d <= 3; d++) if (!solid(x, y - d)) top = true;
+      for (let d = 1; d <= 6; d++) if (!solid(x, y + d)) under = true;
+      const n = rand();
+      dot(ctx, ox + x, oy + y, !solid(x, y + 1) || !solid(x + 1, y) ? lo : top ? hi : under ? lo : n < 0.015 ? hi : n < 0.03 ? lo : mid);
+    }
+  }
+  const mark = (x: number, y: number, color: string) => {
+    if (inside(x, y)) dot(ctx, ox + x, oy + y, color);
+  };
+  if (style === 1) {
+    // cracks; the glow in the middle is drawn live so it can pulse
+    for (let k = 0; k < 3; k++) wander(mark, 5 + rand() * 22, 4 + rand() * 8, 7, '#2d0c0a', rand);
+  } else if (style === 2) {
+    // chevrons pointing up
+    for (const row of [10, 18]) {
+      for (let i = -6; i <= 6; i++) {
+        mark(16 + i, row + Math.floor(Math.abs(i) * 0.6), '#ffffff');
+        mark(16 + i, row + 1 + Math.floor(Math.abs(i) * 0.6), '#ffffff');
+      }
+    }
+  } else if (style === 3) {
+    for (let k = 0; k < 4; k++) wander(mark, 3 + rand() * 26, 3 + rand() * 14, 10, '#4e463b', rand);
+  }
+}
+
+// A crack: a pixel walk heading roughly downward.
+function wander(mark: (x: number, y: number, color: string) => void, x0: number, y0: number, steps: number, color: string, rand: () => number) {
+  let [x, y] = [Math.floor(x0), Math.floor(y0)];
+  for (let s = 0; s < steps; s++) {
+    mark(x, y, color);
+    x += rand() < 0.5 ? 1 : -1;
+    y += rand() < 0.75 ? 1 : 0;
+  }
+}
+
+// Stardust: bright points scattered through a dark tile.
+function drawStars(ctx: CanvasRenderingContext2D, ox: number, oy: number, rand: () => number) {
+  for (let i = 0; i < 12; i++) {
+    const x = ox + 4 + Math.floor(rand() * (TILE - 8));
+    const y = oy + 4 + Math.floor(rand() * (TILE - 8));
+    dot(ctx, x, y, '#ffffff');
+    if (i % 3 === 0) {
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) dot(ctx, x + dx, y + dy, '#d9ceff');
+    }
+  }
+}
+
 // Per-metal touches: a body colour if it differs from the ore colour, patina
 // patches (copper), rust specks (iron) and how often a pixel catches a glint.
 interface MetalLook {
@@ -296,11 +412,15 @@ const METAL_LOOK: Record<string, MetalLook> = {
   Silver: { glint: 0.2 },
   Gold: { glint: 0.2 },
   Platinum: { glint: 0.16 },
+  'Silver Lining': { glint: 0.3 },
+  Stormglass: { glint: 0.25 },
+  Sunstone: { glint: 0.25 },
 };
 
 function drawOre(ctx: CanvasRenderingContext2D, x: number, y: number, i: number, rand: () => number) {
   const ore = ORES[i];
-  if (GEMS.has(ore.name)) drawGems(ctx, x, y, ore.color, rand);
+  if (ore.name === 'Stardust') drawStars(ctx, x, y, rand);
+  else if (GEMS.has(ore.name)) drawGems(ctx, x, y, ore.color, rand);
   else drawGrains(ctx, x, y, ore.color, METAL_LOOK[ore.name] ?? { glint: 0.1 }, rand);
 }
 

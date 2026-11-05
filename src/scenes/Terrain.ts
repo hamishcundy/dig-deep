@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { BANDS, ORES, TILE } from '../config';
 import { World } from '../world/World';
 import { isOre, oreIndex, Tile } from '../world/tiles';
-import { BLEND_LEVELS, Frame, VARIANTS } from './terrainArt';
+import { BLEND_LEVELS, CLOUD_VARIANTS, Frame, VARIANTS, cloudColor, cloudStyle } from './terrainArt';
 
 const TRANSITION = 10; // rows over which one ground layer blends into the next
 
@@ -103,6 +103,8 @@ export class Terrain {
   // Colour for dirt particles from this cell.
   colorAt(col: number, row: number, tile: number): number {
     if (isOre(tile) && Math.random() < 0.5) return ORES[oreIndex(tile)].color;
+    const style = cloudStyle(tile);
+    if (style >= 0) return cloudColor(style);
     return BANDS[this.nearest(row * this.world.cols + col)].light; // lighter than the ground so it shows against it
   }
 
@@ -123,6 +125,7 @@ export class Terrain {
     else if (t === Tile.Topsoil) ground = Frame.topsoil(v);
     else if (t === Tile.Bedrock) ground = Frame.bedrock(v);
     else if (t === Tile.Pad) ground = Frame.pad();
+    else if (isOre(t) && cloudStyle(t) >= 0) feature = Frame.ore(oreIndex(t), v); // drawEdge adds the cloud under it
     else if (t === Tile.Boulder || isOre(t)) {
       ground = dirt;
       feature = t === Tile.Boulder ? Frame.boulder(v) : Frame.ore(oreIndex(t), v);
@@ -139,6 +142,12 @@ export class Terrain {
     if (t === Tile.Empty || t === Tile.Bedrock || t === Tile.Pad) return put(this.edges, -1, c, r);
     const open = (cc: number, rr: number) => world.get(cc, rr) === Tile.Empty;
     let mask = (open(c, r - 1) ? 1 : 0) | (open(c + 1, r) ? 2 : 0) | (open(c, r + 1) ? 4 : 0) | (open(c - 1, r) ? 8 : 0);
+    const style = cloudStyle(t);
+    if (style >= 0) {
+      // A sky block's shape depends on its open sides, so it has no separate edge.
+      put(this.ground, Frame.cloud(style, mask, this.variants[r * world.cols + c] % CLOUD_VARIANTS), c, r);
+      return put(this.edges, -1, c, r);
+    }
     if (r === world.surfaceRow) mask &= ~1; // grass handles the top of the surface
     put(this.edges, mask ? Frame.edge(this.nearest(r * world.cols + c), mask) : -1, c, r);
   }

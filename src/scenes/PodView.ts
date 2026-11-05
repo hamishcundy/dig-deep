@@ -102,7 +102,7 @@ export class PodView {
     this.sprite
       .setFrame(podFrame(this.drillFrame, this.treadFrame))
       .setPosition(cx + shake, cy + shake)
-      .setAngle((dir === 'right' ? -90 : dir === 'left' ? 90 : 0) + this.tilt)
+      .setAngle((dir === 'right' ? -90 : dir === 'left' ? 90 : dir === 'up' ? 180 : 0) + this.tilt)
       .setFlipX(pod.facing < 0)
       .setScale(1 + 0.15 * this.squash, 1 - 0.22 * this.squash)
       .setTint(dead || flashing ? 0xff5050 : 0xffffff);
@@ -118,6 +118,9 @@ export class PodView {
       if (dir === 'down') {
         this.dirtAngle = 270;
         this.dirt.emitParticleAt(cx, pod.y + pod.h + 6, 2);
+      } else if (dir === 'up') {
+        this.dirtAngle = 90; // showers down from the block above
+        this.dirt.emitParticleAt(cx, pod.y - 6, 2);
       } else {
         const side = dir === 'right' ? 1 : -1;
         this.dirtAngle = side > 0 ? 225 : 315;

@@ -9,6 +9,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: 4,
+    title: 'The sky',
+    notes: [
+      'Beat Gorlab and the sky opens: floating islands with new ore, up to 600 m high.',
+      'Drill sky blocks from below. Sky ore is fragile, so land gently or it can shatter.',
+      'Watch for blast clouds, bounce clouds and crumbling clouds.',
+      'New upgrade levels after Gorlab, and Cargo padding.',
+    ],
+  },
+  {
     id: 3,
     title: 'Gorlab',
     notes: ['Something sleeps at the bottom of the world, 600 m down. Bring dynamite and a repair kit.'],

@@ -1,4 +1,4 @@
-import { BUILDINGS, GEN, GORLAB, ORES, WORLD } from '../config';
+import { BUILDINGS, GEN, GORLAB, ORES, SKY, WORLD } from '../config';
 import { Tile, oreTile } from './tiles';
 
 // Small, fast seeded RNG (mulberry32) so a seed always builds the same world.
@@ -27,12 +27,14 @@ export class World {
   readonly rows = WORLD.skyRows + WORLD.depth + 1; // +1 bedrock floor
   readonly cells: Uint8Array;
   readonly cavern: Cavern;
+  ceilingRow: number; // the pod can't fly above this row until the sky opens
 
   constructor(readonly seed: number) {
     this.cells = new Uint8Array(this.cols * this.rows);
     const c0 = Math.floor((this.cols - GORLAB.cavernWidth) / 2);
     const r1 = this.rows - 2; // just above the bedrock floor
     this.cavern = { c0, c1: c0 + GORLAB.cavernWidth - 1, r0: r1 - GORLAB.cavernHeight + 1, r1 };
+    this.ceilingRow = this.surfaceRow - SKY.lockedRows;
     this.generate();
   }
 
@@ -49,6 +51,10 @@ export class World {
 
   depthOf(row: number): number {
     return row - this.surfaceRow;
+  }
+
+  openSky(): void {
+    this.ceilingRow = 0;
   }
 
   // Open Gorlab's cavern: a dome with a flat floor on the bedrock, its edge a
@@ -101,6 +107,38 @@ export class World {
       for (let col = b.col; col < b.col + b.width; col++) this.set(col, this.surfaceRow, Tile.Pad);
     }
     this.carveCavern();
+    this.generateSky();
+  }
+
+  // Floating islands: wherever smooth noise is high enough. Patches of blast and
+  // crumbling cloud come from noise of their own, so they clump. Uses its own random
+  // stream, so a seed's underground is the same with or without the sky.
+  private generateSky(): void {
+    const rand = mulberry32(this.seed ^ 0x51c0);
+    const broad = valueNoise(rand, 9, 5);
+    const fine = valueNoise(rand, 4, 3);
+    const blast = valueNoise(rand, 3, 3); // small patches, so one fuse doesn't take a whole island
+    const crumble = valueNoise(rand, 5, 3);
+    const span = SKY.islandsTo - SKY.islandsFrom;
+    for (let height = SKY.islandsFrom; height <= SKY.islandsTo; height++) {
+      const row = this.surfaceRow - height;
+      const up = (height - SKY.islandsFrom) / span;
+      const blastAbove = SKY.blastThreshold.low + (SKY.blastThreshold.high - SKY.blastThreshold.low) * up;
+      for (let col = 0; col < this.cols; col++) {
+        if (0.65 * broad(col, row) + 0.35 * fine(col, row) < SKY.islandThreshold) continue;
+        this.set(col, row, this.pickSkyTile(height, blast(col, row) > blastAbove, crumble(col, row) > SKY.crumbleThreshold, rand));
+      }
+    }
+  }
+
+  private pickSkyTile(height: number, inBlast: boolean, inCrumble: boolean, rand: () => number): number {
+    if (inBlast) return Tile.Blast;
+    if (rand() < SKY.oreChance) {
+      const unlocked = ORES.map((ore, i) => ({ ore, i })).filter(({ ore }) => ore.sky && height >= ore.minDepth);
+      return oreTile(weightedPick(unlocked, rand));
+    }
+    if (inCrumble) return Tile.Crumble;
+    return rand() < SKY.bounceChance ? Tile.Bounce : Tile.Cloud;
   }
 
   private pickTile(depth: number, rand: () => number): number {
@@ -113,15 +151,43 @@ export class World {
     }
 
     if (rand() < GEN.oreChance) {
-      const unlocked = ORES.map((ore, i) => ({ ore, i })).filter(({ ore }) => depth >= ore.minDepth);
-      const total = unlocked.reduce((sum, { ore }) => sum + ore.weight, 0);
-      let pick = rand() * total;
-      for (const { ore, i } of unlocked) {
-        pick -= ore.weight;
-        if (pick <= 0) return oreTile(i);
-      }
+      const unlocked = ORES.map((ore, i) => ({ ore, i })).filter(({ ore }) => !ore.sky && depth >= ore.minDepth);
+      return oreTile(weightedPick(unlocked, rand));
     }
 
     return Tile.Dirt;
   }
+}
+
+function weightedPick(options: { ore: { weight: number }; i: number }[], rand: () => number): number {
+  const total = options.reduce((sum, { ore }) => sum + ore.weight, 0);
+  let pick = rand() * total;
+  for (const { ore, i } of options) {
+    pick -= ore.weight;
+    if (pick <= 0) return i;
+  }
+  return options[options.length - 1].i;
+}
+
+// Smooth noise (0..1): random values on a lattice cellW by cellH tiles, blended between.
+function valueNoise(rand: () => number, cellW: number, cellH: number): (col: number, row: number) => number {
+  const values = new Map<number, number>();
+  const at = (i: number, j: number) => {
+    const key = j * 4096 + i;
+    let v = values.get(key);
+    if (v === undefined) {
+      v = rand();
+      values.set(key, v);
+    }
+    return v;
+  };
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  return (col, row) => {
+    const [fx, fy] = [col / cellW, row / cellH];
+    const [ix, iy] = [Math.floor(fx), Math.floor(fy)];
+    const [tx, ty] = [smooth(fx - ix), smooth(fy - iy)];
+    const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * tx;
+    const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * tx;
+    return top + (bottom - top) * ty;
+  };
 }

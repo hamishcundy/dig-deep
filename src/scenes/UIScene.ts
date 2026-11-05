@@ -78,7 +78,7 @@ export class UIScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     const { pod, world, stats, fuelMark, fuelState } = this.gameScene;
-    const depth = Math.max(0, pod.row - world.surfaceRow + 1);
+    const depth = pod.row - world.surfaceRow + 1; // negative above the surface
     this.hud.update(stats, fuelMark, fuelState, depth * METRES_PER_TILE, time, delta / 1000);
     this.itemBar.update(stats.items, stats.itemSlots);
     this.glow.setVisible(fuelState === 'critical').setAlpha(0.7 + 0.3 * Math.sin(time / 180));
@@ -165,7 +165,7 @@ export class UIScene extends Phaser.Scene {
         onCancel: close,
       });
     } else if (kind === 'shop') {
-      const keys = Object.keys(UPGRADES) as UpgradeKey[];
+      const keys = (Object.keys(UPGRADES) as UpgradeKey[]).filter((key) => s.skyOpen || !UPGRADES[key].skyOnly);
       const buttons = keys.map((key): PanelButton => {
         const { name, format } = UPGRADES[key];
         const price = s.upgradePrice(key);
@@ -331,7 +331,7 @@ export class UIScene extends Phaser.Scene {
     this.showPanel({
       title: 'Gorlab is defeated',
       lines: [
-        'You reached the bottom of the world and won.',
+        'You reached the bottom of the world and won. The sky has opened above you, too: fly up.',
         ['Reward', `$${summary.reward.toLocaleString()}`],
         ['Time played', time],
         ['Trips down', `${summary.trips}`],

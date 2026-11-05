@@ -1,8 +1,9 @@
-import { ECONOMY, ITEM_REFILL_MARKUP, ITEMS, ORES, UPGRADE_PRICES, UPGRADES, type ItemKey, type UpgradeKey } from '../config';
+import { BASE_LEVELS, ECONOMY, FALL, ITEM_REFILL_MARKUP, ITEMS, ORES, PHYSICS, SKY, UPGRADE_PRICES, UPGRADES, type ItemKey, type UpgradeKey } from '../config';
 
 // Money, fuel, hull, cargo, items and upgrade levels, plus the surface services that change them.
 export class PodStats {
-  levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0, slots: 0 };
+  levels: Record<UpgradeKey, number> = { drill: 0, hull: 0, engine: 0, fuel: 0, cargo: 0, slots: 0, padding: 0 };
+  skyOpen = false; // set by the game from Gorlab's fate; not saved
   money = ECONOMY.startMoney;
   deepest = 0; // deepest row reached, in tiles below the surface; earthquakes start past a depth
   fuel = this.value('fuel');
@@ -36,7 +37,11 @@ export class PodStats {
 
   // Price of the next level, or null when maxed.
   upgradePrice(key: UpgradeKey): number | null {
-    return UPGRADE_PRICES[this.levels[key]] ?? null;
+    const level = this.levels[key];
+    const def = UPGRADES[key];
+    if (level + 1 >= def.values.length) return null;
+    if (!this.skyOpen && (def.skyOnly || level + 1 >= BASE_LEVELS)) return null;
+    return (def.prices ?? UPGRADE_PRICES)[level];
   }
 
   buyUpgrade(key: UpgradeKey): boolean {
@@ -48,6 +53,24 @@ export class PodStats {
     if (key === 'hull') this.hull = this.maxHull;
     if (key === 'fuel') this.fuel = this.fuelCapacity;
     return true;
+  }
+
+  // A hard landing can break sky ore: the harder the landing, the more, less
+  // whatever padding catches. Returns how many pieces were lost.
+  shatter(impact: number): number {
+    const severity = Math.min(1, Math.max(0, (impact - FALL.safeSpeed) / (PHYSICS.maxFall - FALL.safeSpeed)));
+    const chance = severity * SKY.maxShatter * (1 - this.value('padding'));
+    let lost = 0;
+    ORES.forEach((ore, i) => {
+      if (!ore.sky) return;
+      for (let n = this.cargo[i]; n > 0; n--) {
+        if (Math.random() < chance) {
+          this.cargo[i]--;
+          lost++;
+        }
+      }
+    });
+    return lost;
   }
 
   get cargoCount(): number {
@@ -120,6 +143,7 @@ export class PodStats {
     copy.levels = { ...this.levels };
     copy.money = this.money;
     copy.deepest = this.deepest;
+    copy.skyOpen = this.skyOpen;
     copy.fuel = this.fuel;
     copy.hull = this.hull;
     copy.cargo = [...this.cargo];

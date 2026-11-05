@@ -1,6 +1,6 @@
-import { DRILL, PHYSICS, POD, TILE } from '../config';
+import { DRILL, PHYSICS, POD, SKY, TILE } from '../config';
 import { World } from '../world/World';
-import { isDrillable, isOre, isSolid, Tile } from '../world/tiles';
+import { isDrillable, isOre, isSky, isSolid, Tile } from '../world/tiles';
 
 // Multipliers from upgrades and cargo weight.
 export interface PodPower {
@@ -16,7 +16,7 @@ export interface Stick {
   y: number; // -1 (up) .. 1 (down)
 }
 
-export type DrillDir = 'down' | 'left' | 'right';
+export type DrillDir = 'down' | 'left' | 'right' | 'up';
 
 interface Drill {
   col: number;
@@ -55,6 +55,10 @@ export class Pod {
   private power = STOCK_POWER;
   landingSpeed = 0; // px/s of the hardest landing this frame, 0 if none
   private blockedDir = 0;
+  private blockedUp = false;
+  poked: { col: number; row: number } | null = null; // a blast cloud it tried to drill this frame
+  bounced = false; // came off a bounce cloud this frame
+  private holdingDown = false; // pressing down: land on a bounce cloud instead of bouncing, so it can be drilled
 
   constructor(private world: World, col: number, row: number) {
     this.placeAt(col, row);
@@ -88,6 +92,9 @@ export class Pod {
   update(dt: number, stick: Stick, power: PodPower = STOCK_POWER): DugTile | null {
     this.power = power;
     this.landingSpeed = 0;
+    this.poked = null;
+    this.bounced = false;
+    this.holdingDown = stick.y > 0.5;
     if (this.drill) return this.updateDrill(dt);
 
     this.thrusting = false;
@@ -101,6 +108,7 @@ export class Pod {
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (TILE / 4)));
     this.grounded = false;
     this.blockedDir = 0;
+    this.blockedUp = false;
     for (let i = 0; i < steps; i++) {
       this.moveX(dx / steps);
       this.moveY(dy / steps, dt / steps);
@@ -121,12 +129,15 @@ export class Pod {
 
     this.thrusting = stick.y < -0.3;
     this.vy += p.gravity * TILE * dt;
-    if (this.thrusting) this.vy -= p.thrust * thrust * TILE * dt;
-    this.vy = clamp(this.vy, -p.maxRise * speed * TILE, p.maxFall * TILE);
+    // Thrust tops out at the climb rate, but a bounce cloud can throw the pod faster.
+    const topRise = -p.maxRise * speed * TILE;
+    if (this.thrusting && this.vy > topRise) this.vy = Math.max(this.vy - p.thrust * thrust * TILE * dt, topRise);
+    this.vy = Math.min(this.vy, p.maxFall * TILE);
   }
 
   // Down needs the pod sitting on the tile; sideways works on the ground or hovering against a wall.
   private tryStartDrill(stick: Stick): boolean {
+    if (stick.y < -0.5 && -stick.y >= Math.abs(stick.x)) return this.blockedUp && this.tryDrillUp();
     if (stick.y > 0.5 && stick.y >= Math.abs(stick.x)) return this.grounded && this.tryDrillDown();
     if (Math.abs(stick.x) > 0.5) {
       const dir = stick.x > 0 ? 1 : -1;
@@ -135,10 +146,27 @@ export class Pod {
     return false;
   }
 
+  // Upward works on sky blocks only; the underground keeps its rule.
+  private tryDrillUp(): boolean {
+    const col = Math.floor((this.x + this.w / 2) / TILE);
+    const row = Math.floor((this.y - 1) / TILE);
+    const tile = this.world.get(col, row);
+    if (this.poke(col, row) || !isSky(tile)) return false;
+    this.startDrill(col, row, 'up', col * TILE + (TILE - this.w) / 2, row * TILE + TILE - this.h);
+    return true;
+  }
+
+  // Trying to drill a blast cloud doesn't dig it: it lights the fuse.
+  private poke(col: number, row: number): boolean {
+    if (this.world.get(col, row) !== Tile.Blast) return false;
+    this.poked = { col, row };
+    return true;
+  }
+
   private tryDrillDown(): boolean {
     const col = Math.floor((this.x + this.w / 2) / TILE);
     const row = Math.round((this.y + this.h) / TILE);
-    if (!isDrillable(this.world.get(col, row))) return false;
+    if (this.poke(col, row) || !isDrillable(this.world.get(col, row))) return false;
     this.startDrill(col, row, 'down', col * TILE + (TILE - this.w) / 2, row * TILE + TILE - this.h);
     return true;
   }
@@ -147,7 +175,7 @@ export class Pod {
     // The row the pod's centre is in; when hovering, the drill also lines the pod up with it.
     const row = Math.floor((this.y + this.h / 2) / TILE);
     const col = dir > 0 ? Math.round((this.x + this.w) / TILE) : Math.round(this.x / TILE) - 1;
-    if (!isDrillable(this.world.get(col, row))) return false;
+    if (this.poke(col, row) || !isDrillable(this.world.get(col, row))) return false;
     this.startDrill(col, row, dir > 0 ? 'right' : 'left', col * TILE + (TILE - this.w) / 2, row * TILE + TILE - this.h);
     return true;
   }
@@ -156,9 +184,10 @@ export class Pod {
     const tile = this.world.get(col, row);
     const depth = Math.max(0, this.world.depthOf(row));
     const duration =
-      (DRILL.baseTime * (1 + depth * DRILL.depthHardness) * (isOre(tile) ? DRILL.oreTimeFactor : 1)) / this.power.drill;
+      (DRILL.baseTime * (1 + depth * DRILL.depthHardness) * (isOre(tile) ? DRILL.oreTimeFactor : 1) * (isSky(tile) ? SKY.cloudTimeFactor : 1)) /
+      this.power.drill;
     this.drill = { col, row, dir, fromX: this.x, fromY: this.y, toX, toY, t: 0, duration };
-    if (dir !== 'down') this.facing = dir === 'right' ? 1 : -1;
+    if (dir === 'left' || dir === 'right') this.facing = dir === 'right' ? 1 : -1;
     this.vx = 0;
     this.vy = 0;
   }
@@ -186,7 +215,7 @@ export class Pod {
     const r1 = Math.floor((y + this.h - EPS) / TILE);
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        if (isSolid(this.world.get(c, r))) return true;
+        if (r < this.world.ceilingRow || isSolid(this.world.get(c, r))) return true;
       }
     }
     return false;
@@ -213,16 +242,29 @@ export class Pod {
     }
     if (dy > 0) {
       this.y = Math.floor((ny + this.h - EPS) / TILE) * TILE - this.h;
+      if (!this.holdingDown && this.vy >= SKY.bounce.minLanding * TILE && this.onBounceCloud()) {
+        this.vy = -SKY.bounce.speed * TILE; // no landing: no damage, nothing shatters
+        this.bounced = true;
+        return;
+      }
       this.landingSpeed = Math.max(this.landingSpeed, this.vy);
       this.vy = 0;
       this.grounded = true;
       return;
     }
+    this.blockedUp = true;
     // Hit a ceiling. If a shaft is just off to the side, slide toward it so
     // flying back up a 1-tile shaft doesn't need pixel-perfect steering.
     if (this.nudgeTowardShaft(ny, dt)) return;
     this.y = (Math.floor(ny / TILE) + 1) * TILE;
     this.vy = 0;
+  }
+
+  private onBounceCloud(): boolean {
+    const row = Math.floor((this.y + this.h + 1) / TILE);
+    const c1 = Math.floor((this.x + this.w - EPS) / TILE);
+    for (let c = Math.floor(this.x / TILE); c <= c1; c++) if (this.world.get(c, row) === Tile.Bounce) return true;
+    return false;
   }
 
   private nudgeTowardShaft(ny: number, dt: number): boolean {

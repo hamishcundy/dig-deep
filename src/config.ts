@@ -6,7 +6,7 @@ export const TILE = 32; // px per tile
 export const WORLD = {
   width: 36, // tiles across
   depth: 300, // diggable rows below the surface
-  skyRows: 8, // open rows above the surface
+  skyRows: 308, // rows above the surface: most stay closed off until Gorlab falls (see SKY)
 };
 
 export const VIEW = {
@@ -14,6 +14,24 @@ export const VIEW = {
 };
 
 export const METRES_PER_TILE = 2;
+
+// The sky level, opened by beating Gorlab: floating islands above the surface.
+export const SKY = {
+  lockedRows: 8, // open rows above the surface until then
+  islandsFrom: 14, // lowest islands, in rows above the surface
+  islandsTo: 298, // highest islands
+  islandThreshold: 0.6, // value noise (0..1) above this is island; lower means more cloud
+  oreChance: 0.16, // chance an island tile holds ore
+  bounceChance: 0.04,
+  crumbleThreshold: 0.76, // noise above this is a patch of crumbling cloud
+  blastThreshold: { low: 0.8, high: 0.7 }, // noise above this is blast cloud: more of it higher up
+  cloudTimeFactor: 0.5, // drilling cloud takes this share of the usual time
+  maxShatter: 0.8, // share of sky ore lost landing at top speed (safe speed loses none)
+  blast: { fuse: 1, chainFuse: 0.2, radius: 1, hurtRange: 2, damage: 10, knock: 10, hurtGap: 0.3 },
+  bounce: { speed: 14, minLanding: 3 }, // launch speed, and the landing speed needed to launch (tiles/s)
+  crumble: { delay: 0.8, chainDelay: 0.15 }, // seconds until it falls, once stood on or once a neighbour goes
+  loose: { gravity: 14, maxFall: 10, life: 20 }, // ore thrown clear by a blast
+};
 
 // It gets darker with depth; the pod's headlight lights a pool around it.
 export const DARKNESS = {
@@ -43,24 +61,30 @@ export const PHYSICS = {
   fullCargoThrustPenalty: 0.3, // thrust lost with a full cargo bay (0.3 = 30%), scaled by how full it is
 };
 
-export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo' | 'slots';
+export type UpgradeKey = 'drill' | 'hull' | 'engine' | 'fuel' | 'cargo' | 'slots' | 'padding';
 
 export interface UpgradeDef {
   name: string;
   values: number[]; // [stock, level 1, level 2, ...]
   format: (v: number) => string;
+  prices?: number[]; // its own price ladder, instead of UPGRADE_PRICES
+  skyOnly?: boolean; // not on sale until the sky opens
 }
 
-// Price of each level, shared by every upgrade.
-export const UPGRADE_PRICES = [500, 2500, 10000, 40000];
+// Price of each level, shared by most upgrades. Levels from BASE_LEVELS on go on
+// sale when the sky opens.
+export const UPGRADE_PRICES = [500, 2500, 10000, 40000, 100000, 250000];
+export const BASE_LEVELS = 5;
 
 export const UPGRADES: Record<UpgradeKey, UpgradeDef> = {
-  drill: { name: 'Drill', values: [1, 1.4, 1.9, 2.6, 3.5], format: (v) => `x${v}` }, // drill speed multiplier
-  hull: { name: 'Hull', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // max hull
-  engine: { name: 'Engine', values: [1, 1.12, 1.25, 1.4, 1.55], format: (v) => `${Math.round(v * 100)}%` }, // thrust and top speed
-  fuel: { name: 'Fuel', values: [10, 15, 22, 32, 45], format: (v) => `${v}L` }, // tank litres
-  cargo: { name: 'Cargo', values: [10, 15, 22, 32, 45], format: (v) => `${v}` }, // ore
+  drill: { name: 'Drill', values: [1, 1.4, 1.9, 2.6, 3.5, 4.5, 6], format: (v) => `x${v}` }, // drill speed multiplier
+  hull: { name: 'Hull', values: [10, 15, 22, 32, 45, 60, 80], format: (v) => `${v}` }, // max hull
+  engine: { name: 'Engine', values: [1, 1.12, 1.25, 1.4, 1.55, 1.7, 1.85], format: (v) => `${Math.round(v * 100)}%` }, // thrust and top speed
+  fuel: { name: 'Fuel', values: [10, 15, 22, 32, 45, 60, 80], format: (v) => `${v}L` }, // tank litres
+  cargo: { name: 'Cargo', values: [10, 15, 22, 32, 45, 60, 80], format: (v) => `${v}` }, // ore
   slots: { name: 'Item slots', values: [1, 2, 3, 4, 5], format: (v) => `${v}` }, // items carried
+  // share of the shattering it prevents
+  padding: { name: 'Cargo padding', values: [0, 0.25, 0.5, 0.7, 0.85], format: (v) => `${Math.round(v * 100)}%`, prices: [50000, 100000, 200000, 400000], skyOnly: true },
 };
 
 export const FUEL = {
@@ -163,9 +187,10 @@ export const DRILL = {
 export interface OreDef {
   name: string;
   price: number;
-  minDepth: number; // rows below the surface
+  minDepth: number; // rows below the surface; for sky ore, rows above it
   weight: number; // relative spawn weight once unlocked
   color: number;
+  sky?: boolean; // found on islands instead of underground, and fragile
 }
 
 export const ORES: OreDef[] = [
@@ -177,6 +202,10 @@ export const ORES: OreDef[] = [
   { name: 'Emerald', price: 2000, minDepth: 150, weight: 3, color: 0x2ecc71 },
   { name: 'Ruby', price: 5000, minDepth: 200, weight: 2, color: 0xe0115f },
   { name: 'Diamond', price: 20000, minDepth: 250, weight: 1, color: 0xf4fdff },
+  { name: 'Silver Lining', price: 400, minDepth: 14, weight: 6, color: 0xdde8f8, sky: true },
+  { name: 'Stormglass', price: 1500, minDepth: 100, weight: 6, color: 0x35dcf0, sky: true },
+  { name: 'Sunstone', price: 5000, minDepth: 180, weight: 6, color: 0xffa81f, sky: true },
+  { name: 'Stardust', price: 15000, minDepth: 240, weight: 5, color: 0xb9a8ff, sky: true },
 ];
 
 // Ground layers by depth. Each changes the look of dirt and tunnel walls.

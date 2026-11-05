@@ -1,17 +1,18 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
 import { Gorlab } from '../boss/Gorlab';
-import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, GORLAB, METRES_PER_TILE, ORES, PHYSICS, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
+import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, GORLAB, METRES_PER_TILE, ORES, PHYSICS, SKY, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
 import { clearProgress, loadProgress, saveProgress, type Progress } from '../game/progress';
 import { clearSave, loadSave, writeSave } from '../game/save';
 import { Controls } from '../input/Controls';
 import { Pod, type DugTile, type Stick } from '../pod/Pod';
 import { World } from '../world/World';
-import { Tile, isDrillable, isOre, isSolid, oreIndex } from '../world/tiles';
+import { Tile, isDrillable, isOre, isSky, isSolid, oreIndex } from '../world/tiles';
 import { Darkness } from './Darkness';
 import { GorlabView } from './GorlabView';
 import { PodView } from './PodView';
+import { SkyEffects } from './SkyEffects';
 import { Surface } from './Surface';
 import { Terrain } from './Terrain';
 import { makeTextures } from './textures';
@@ -53,6 +54,7 @@ export class GameScene extends Phaser.Scene {
   private gorlabView: GorlabView | null = null;
   private wentUnderground = false; // since the last surface stop, for counting trips
   private hurtFxAt = 0; // last time damage flashed and clanked, so steady burns don't spam
+  private sky!: SkyEffects;
 
   constructor() {
     super('game');
@@ -64,13 +66,18 @@ export class GameScene extends Phaser.Scene {
     const urlSeed = readUrlSeed();
     const save = urlSeed === null ? loadSave() : null;
     this.world = new World(save?.seed ?? urlSeed ?? Math.floor(Math.random() * 1e9));
-    const resumed = save !== null && save.cells.length === this.world.cells.length;
+    // A save from before the sky opened up has fewer rows: its cells line up with the
+    // bottom of the world, and the new sky stays as generated.
+    const skyRowsAdded = save ? this.world.cells.length - save.cells.length : -1;
+    const resumed = save !== null && skyRowsAdded >= 0 && skyRowsAdded % this.world.cols === 0;
     if (resumed) {
-      this.world.cells.set(save.cells);
+      this.world.cells.set(save.cells, skyRowsAdded);
       this.world.carveCavern(); // saves from before Gorlab's cavern existed
     }
     this.progress = loadProgress(this.world.seed);
+    if (this.progress.gorlabDefeated) this.world.openSky();
     this.stats = resumed ? save.stats : new PodStats();
+    this.stats.skyOpen = this.progress.gorlabDefeated;
     console.log(`seed ${this.world.seed} (add ?seed=${this.world.seed} to the URL to replay this world)`);
 
     const { cols, rows, surfaceRow } = this.world;
@@ -86,10 +93,14 @@ export class GameScene extends Phaser.Scene {
       this.gorlabView = new GorlabView(this, this.gorlab);
     }
     this.darkness = new Darkness(this);
+    this.sky = new SkyEffects(this, this.world, this.terrain, this.podView, {
+      hurt: (amount) => this.damagePod(amount, 'Caught in a blast'),
+      collect: (ore, x, y) => this.collectLoose(ore, x, y),
+    });
     this.takeSnapshot();
 
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, cols * TILE, rows * TILE);
+    this.fitCameraBounds();
     cam.startFollow(this.podView.sprite, true, 0.15, 0.15);
     this.fitCamera();
     this.scale.on('resize', this.fitCamera, this);
@@ -101,6 +112,12 @@ export class GameScene extends Phaser.Scene {
       this.ui.showTitle(resumed);
     });
     this.game.events.on(Phaser.Core.Events.HIDDEN, () => this.pause()); // e.g. switching apps on a phone
+  }
+
+  // The camera stops at the pod's ceiling, so the closed-off sky can't be seen.
+  private fitCameraBounds(): void {
+    const { cols, rows, ceilingRow } = this.world;
+    this.cameras.main.setBounds(0, ceilingRow * TILE, cols * TILE, (rows - ceilingRow) * TILE);
   }
 
   private fitCamera(): void {
@@ -124,6 +141,7 @@ export class GameScene extends Phaser.Scene {
     this.podView.update(dt, this.mode === 'dead', d ? this.terrain.colorAt(d.col, d.row, this.world.get(d.col, d.row)) : 0);
     this.terrain.updateSparkles(dt, this.cameras.main.worldView);
     this.gorlabView?.update(dt);
+    this.sky.draw(dt, this.cameras.main.worldView);
     this.surface.update(dt);
     this.darkness.update(dt, this.pod, this.world.depthOf(this.pod.row));
   }
@@ -146,6 +164,9 @@ export class GameScene extends Phaser.Scene {
     this.progress.playTime += dt;
     if (pod.row >= world.surfaceRow) this.wentUnderground = true;
     if (this.gorlab && this.updateGorlab(dt)) return; // destroyed by it
+    if (pod.poked) this.sky.light(pod.poked.col, pod.poked.row);
+    if (pod.bounced) sound.bounce();
+    if (this.sky.step(dt, pod)) return; // destroyed by a blast
 
     stats.fuel = Math.max(0, stats.fuel - (FUEL.idle + (pod.thrusting ? FUEL.thrust : 0) + (pod.drill ? FUEL.drill : 0)) * dt);
     if (this.braking) pod.thrusting = true; // show the flame; the thrusters burn their own fuel
@@ -159,6 +180,7 @@ export class GameScene extends Phaser.Scene {
       this.podView.landed(impact);
       sound.land(impact);
     }
+    if (impact > FALL.safeSpeed) this.shatterCargo(impact);
     if (impact > FALL.safeSpeed && this.damagePod((impact - FALL.safeSpeed) * FALL.damagePerSpeed, 'Hull destroyed')) return;
 
     const atSurface = pod.grounded && !pod.drill && pod.row === world.surfaceRow - 1;
@@ -193,7 +215,8 @@ export class GameScene extends Phaser.Scene {
     const prev = this.fuelState;
     this.fuelState = !playing || stats.fuel > this.fuelMark ? 'ok' : stats.fuel > need ? 'low' : 'critical';
     if (prev === 'ok' && this.fuelState !== 'ok' && stats.fuel > 0) {
-      this.ui.toast(pod.row < world.surfaceRow ? 'Low fuel: refuel' : 'Low fuel: head up', 0xff8a3b, 2000);
+      const height = world.surfaceRow - 1 - pod.row;
+      this.ui.toast(height > SKY.lockedRows ? 'Low fuel: head down' : height >= 0 ? 'Low fuel: refuel' : 'Low fuel: head up', 0xff8a3b, 2000);
     }
   }
 
@@ -202,13 +225,32 @@ export class GameScene extends Phaser.Scene {
   private fuelToGetHome(): number {
     const { pod, stats, world } = this;
     const climb = Math.max(0, pod.row - (world.surfaceRow - 1));
+    const descent = Math.max(0, world.surfaceRow - 1 - pod.row);
+    const descentTime = descent / PHYSICS.maxFall; // falling only burns the idle rate
     const speed = PHYSICS.maxRise * stats.enginePower;
     const lift = PHYSICS.thrust * this.thrustPower() - PHYSICS.gravity;
     const climbTime = climb > 0 ? climb / speed + speed / (2 * lift) : 0;
     const pad = BUILDINGS.find((b) => b.kind === 'fuel')!;
     const drive = Math.abs(pod.col - (pad.col + pad.width / 2));
     const driveTime = drive / (PHYSICS.maxSpeedX * stats.enginePower);
-    return climbTime * (FUEL.idle + FUEL.thrust) + driveTime * FUEL.idle;
+    return climbTime * (FUEL.idle + FUEL.thrust) + (driveTime + descentTime) * FUEL.idle;
+  }
+
+  // Sky ore can break on a hard landing.
+  private shatterCargo(impact: number): void {
+    const lost = this.stats.shatter(impact);
+    if (!lost) return;
+    sound.shatter();
+    this.ui.toast(`${lost} sky ore shattered`, 0xff8a3b, 1500);
+  }
+
+  // Ore thrown loose by a blast, caught by flying through it.
+  private collectLoose(ore: number, x: number, y: number): boolean {
+    if (this.stats.cargoFull) return false;
+    this.stats.cargo[ore]++;
+    this.ui.oreCollected(ore, x, y);
+    sound.ore(ore);
+    return true;
   }
 
   // Takes hull off the pod; returns true if that destroyed it. Steady damage
@@ -259,6 +301,7 @@ export class GameScene extends Phaser.Scene {
       sound.gorlabDefeat();
       this.cameras.main.shake(2000, 0.015);
       this.stats.money += GORLAB.reward;
+      this.openSky();
       this.time.delayedCall(2600, () => {
         this.mode = 'menu';
         this.pod.thrusting = false;
@@ -267,6 +310,17 @@ export class GameScene extends Phaser.Scene {
       });
     }
     saveProgress(this.progress);
+  }
+
+  // Beating Gorlab: the sky is open from now on, and the reward is safe even if the
+  // pod is lost before it gets home.
+  private openSky(): void {
+    this.world.openSky();
+    this.fitCameraBounds();
+    this.stats.skyOpen = true;
+    this.snapshot.stats.skyOpen = true;
+    this.snapshot.stats.money += GORLAB.reward;
+    writeSave({ seed: this.world.seed, ...this.snapshot });
   }
 
   // Landing thrusters fire by themselves on a big drop: when the pod would hit the
@@ -336,7 +390,7 @@ export class GameScene extends Phaser.Scene {
         this.blast();
         return true;
       case 'teleport':
-        if (pod.row < world.surfaceRow) return this.refuse('Already at the surface');
+        if (pod.row < world.surfaceRow && pod.row >= world.surfaceRow - SKY.lockedRows) return this.refuse('Already at the surface');
         this.teleportHome();
         return true;
       case 'thrusters':
@@ -357,10 +411,12 @@ export class GameScene extends Phaser.Scene {
     for (let row = pod.row - DYNAMITE_RADIUS; row <= pod.row + DYNAMITE_RADIUS; row++) {
       for (let col = pod.col - DYNAMITE_RADIUS; col <= pod.col + DYNAMITE_RADIUS; col++) {
         const tile = world.get(col, row);
+        if (tile === Tile.Blast) this.sky.light(col, row, SKY.blast.chainFuse);
         if (!isDrillable(tile) && tile !== Tile.Boulder) continue;
         this.podView.burst(col, row, this.terrain.colorAt(col, row, tile));
         world.set(col, row, Tile.Empty);
         this.terrain.dug(col, row);
+        if (isOre(tile) && isSky(tile)) this.sky.dropOre(col, row, oreIndex(tile));
       }
     }
     pod.drill = null; // whatever it was drilling is gone
@@ -466,6 +522,7 @@ export class GameScene extends Phaser.Scene {
     this.usedPad = padAt(snapshot.col);
     this.wentUnderground = false;
     this.gorlab?.sleep(); // its wounds stay
+    this.sky.reset();
     this.mode = 'play';
   }
 

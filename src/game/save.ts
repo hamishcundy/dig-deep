@@ -1,4 +1,4 @@
-import { ITEMS, MAX_ITEM_SLOTS, type ItemKey } from '../config';
+import { ITEMS, MAX_ITEM_SLOTS, ORES, type ItemKey } from '../config';
 import { PodStats } from './PodStats';
 
 // Progress lives in this browser's localStorage: the last surface stop, the
@@ -25,7 +25,7 @@ export function loadSave(): SaveData | null {
     stats.deepest = o.stats.deepest ?? 0;
     stats.fuel = o.stats.fuel;
     stats.hull = o.stats.hull;
-    stats.cargo = o.stats.cargo;
+    stats.cargo = ORES.map((_, i) => o.stats.cargo[i] ?? 0); // saves from before the sky ores have fewer
     stats.levels = { ...stats.levels, ...o.stats.levels };
     stats.items = (Array.isArray(o.stats.items) ? o.stats.items : []).filter((k: string): k is ItemKey => k in ITEMS).slice(0, MAX_ITEM_SLOTS);
     return { seed: o.seed, cells: fromBase64(o.cells), stats, col: o.col };

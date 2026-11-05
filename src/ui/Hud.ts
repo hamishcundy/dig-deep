@@ -44,6 +44,7 @@ export class Hud {
   private cargoText: Phaser.GameObjects.Text;
   private cargoIcon: Phaser.GameObjects.Image;
   private depth: Phaser.GameObjects.Text;
+  private depthIcon: Phaser.GameObjects.Image;
   private money: Phaser.GameObjects.Text;
   private coin: Phaser.GameObjects.Image;
   private toastText: Phaser.GameObjects.Text | null = null;
@@ -64,7 +65,7 @@ export class Hud {
     this.cargoIcon = icon('icon-cargo', 2);
     this.cargo = new Bar(scene, BAR_X, rowY(2));
     this.cargoText = scene.add.text(BAR_X + BAR_W + 6, rowY(2), '', textStyle(20)).setOrigin(0, 0.5).setStroke('#000000', 3);
-    icon('icon-depth', 3);
+    this.depthIcon = icon('icon-depth', 3);
     this.depth = scene.add.text(BAR_X, rowY(3), '', textStyle(22)).setOrigin(0, 0.5).setStroke('#000000', 3);
 
     this.money = scene.add.text(0, 10, '', textStyle(30, '#ffe066')).setStroke('#000000', 4).setOrigin(1, 0);
@@ -79,6 +80,7 @@ export class Hud {
   }
 
   // fuelMark: litres needed to get home, shown as a tick on the fuel gauge.
+  // depthMetres: below the surface, or negative for height above it.
   update(stats: PodStats, fuelMark: number, fuelState: FuelState, depthMetres: number, time: number, dt: number): void {
     // Low fuel flashes the gauge; critical flashes it faster.
     const flash = fuelState !== 'ok' && Math.floor(time / (fuelState === 'critical' ? 150 : 300)) % 2 === 0;
@@ -96,7 +98,8 @@ export class Hud {
     this.cargoText.setText(full ? 'FULL' : `${stats.cargoCount}/${stats.cargoCapacity}`);
     this.cargoText.setColor(full ? (blink ? '#ff8a3b' : '#ffffff') : nearly ? '#ffc531' : '#ffffff');
 
-    this.depth.setText(`${depthMetres} m`);
+    this.depth.setText(depthMetres < 0 ? `+${-depthMetres} m` : `${depthMetres} m`);
+    this.depthIcon.setFlipY(depthMetres < 0);
     this.updateMoney(stats.money, dt);
   }
 
