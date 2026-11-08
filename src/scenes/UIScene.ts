@@ -7,6 +7,7 @@ import { ItemBar } from '../ui/ItemBar';
 import { markReleasesSeen, RELEASES, unseenReleases, type Release } from '../changelog';
 import { installOption, onInstallChange, showInstallPrompt } from '../pwa';
 import { Panel, type PanelButton, type PanelSpec } from '../ui/Panel';
+import { onTap } from '../ui/tap';
 import { textStyle } from '../ui/theme';
 import type { GameScene } from './GameScene';
 
@@ -52,7 +53,7 @@ export class UIScene extends Phaser.Scene {
       this.add.rectangle(-5, 0, 4, 14, 0xffffff),
       this.add.rectangle(5, 0, 4, 14, 0xffffff),
     ]);
-    button.setSize(36, 36).setInteractive({ useHandCursor: true }).on('pointerup', () => this.gameScene.pause());
+    onTap(button.setSize(36, 36).setInteractive({ useHandCursor: true }), () => this.gameScene.pause());
     const layout = () => button.setPosition(this.scale.width - 30, 58);
     layout();
     this.scale.on('resize', layout);
@@ -346,12 +347,13 @@ export class UIScene extends Phaser.Scene {
 
   showDeath(reason: string): void {
     const game = this.gameScene;
+    const back = () => this.showDeath(reason);
     this.showPanel({
       title: reason,
       lines: ['Back to your last stop', 'on the surface. Anything', 'mined since is lost.'],
       buttons: [
         { label: 'Continue', onClick: () => (this.hidePanel(), game.continueAfterDeath()) },
-        { label: 'New game', onClick: () => game.newGame() },
+        { label: 'New game', onClick: () => this.confirmNewGame(back) },
       ],
     });
   }

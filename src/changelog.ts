@@ -9,6 +9,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: 5,
+    title: 'Fix',
+    notes: ['Losing the pod while steering could start a new game by accident. Buttons now need a proper tap, and New game always asks first.'],
+  },
+  {
     id: 4,
     title: 'The sky',
     notes: [

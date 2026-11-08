@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ITEMS, MAX_ITEM_SLOTS, type ItemKey } from '../config';
+import { onTap } from './tap';
 import { textStyle } from './theme';
 
 const SIZE = 52;
@@ -26,7 +27,7 @@ export class ItemBar {
   ) {
     for (let i = 0; i < MAX_ITEM_SLOTS; i++) {
       const bg = scene.add.rectangle(0, 0, SIZE, SIZE, 0x000000, 0.5).setStrokeStyle(1, 0xffffff, 0.4);
-      bg.setInteractive({ useHandCursor: true }).on('pointerup', () => onUse(i));
+      onTap(bg.setInteractive({ useHandCursor: true }), () => onUse(i));
       const icon = scene.add.image(0, 0, '__DEFAULT').setScale(2);
       const auto = scene.add.text(0, 0, 'AUTO', textStyle(14, '#ffc531')).setOrigin(0.5, 0).setStroke('#000000', 3);
       this.slots.push({ bg, icon, auto });
