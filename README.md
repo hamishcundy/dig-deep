@@ -10,6 +10,8 @@ npm run build    # static site in dist/
 
 Controls: arrows / WASD on desktop; on a phone, drag anywhere on the left of the screen.
 
+What's in it: digging for ore across five ground layers, fuel, hull and cargo, surface buildings (fuel, sell, repair and supplies, upgrade shop), single-use items in upgradable slots, earthquakes, darkness with a headlight, Gorlab the boss at 600 m, and after beating him a sky level of floating islands with fragile ore, blast, bounce and crumbling clouds.
+
 Progress saves in the browser (localStorage) at each surface stop.
 
 Sound effects are synthesised in code (`src/audio/sound.ts`); there are no audio files.
@@ -18,4 +20,4 @@ Installable as an app: `public/manifest.webmanifest` and `public/sw.js` (offline
 
 Dev URL options: `?seed=123` plays a specific world (and ignores the save); `?timer` keeps the game loop running in a background tab.
 
-Tuning numbers (physics, drill speed, ores, world size) are all in `src/config.ts`.
+Tuning numbers (physics, drill speed, ores, world size) are all in `src/config.ts`. Notes for working on the code, including how to test in the browser, are in `CLAUDE.md`.
