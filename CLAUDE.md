@@ -27,8 +27,19 @@ Motherload-style mining game. Phaser 4.2 + TypeScript + Vite, deployed to GitHub
 ## Saves
 
 - `digdeep-save` (surface snapshot, version 1), `digdeep-progress` (per seed), `digdeep-muted`, `digdeep-seen` (What's New).
-- The world grew from 309 to 609 rows when the sky arrived: older saves line up with the bottom of the world on load. Keep loading old saves working when changing the layout.
 - `?seed=123` ignores the save (progress still loads for that seed).
+
+## Backward compatibility: players' saves must survive every update
+
+The game has loyal players with long-running saves. Every update must load their existing save and give them the new content without breaking it or losing progress. Anything that can't load a save today **silently starts a new game**, so a mistake here wipes people's progress with no error.
+
+- **Never bump `VERSION` in `save.ts`.** `loadSave` returns null for any other version, which wipes every save. Add fields instead.
+- **New fields get defaults on load** (`?? 0`, merge over `new PodStats()`), the way `deepest`, `levels`, `items` and the sky ore cargo are handled. Never assume a field exists.
+- **Never renumber or reuse tile ids or ore order.** Cells and cargo are stored by index. Add new tiles and ores at the end.
+- **World layout:** the column count can't change. Rows can only be added, and loading lines old cells up with the bottom of the world (see `GameScene.create`). If the cell count doesn't fit, the save is dropped, so test any layout change against an old save.
+- **New world features in old worlds:** a saved world keeps its saved cells, so anything generated into the world (like Gorlab's cavern, `carveCavern`) has to be stamped onto loaded saves too, or old players never see it.
+- **Removed items or upgrades:** loading filters out unknown keys. Removing one takes it from players: decide what they get back.
+- **Test every save-touching change** by loading a save written by the live build (copy `digdeep-save` and `digdeep-progress` from the live site's localStorage) and checking money, upgrades, items, cargo and the dug world all survive.
 
 ## Testing in the Claude browser pane
 

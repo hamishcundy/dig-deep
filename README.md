@@ -14,6 +14,8 @@ What's in it: digging for ore across five ground layers, fuel, hull and cargo, s
 
 Progress saves in the browser (localStorage) at each surface stop.
 
+**Backward compatibility matters.** Players have long-running saves, and every update must load them and give them the new content without losing progress. A save that fails to load silently starts a new game. The rules (never bump the save version, default new fields, never renumber tiles or ores, how world layout changes load) are in `CLAUDE.md`.
+
 Sound effects are synthesised in code (`src/audio/sound.ts`); there are no audio files.
 
 Installable as an app: `public/manifest.webmanifest` and `public/sw.js` (offline cache). The worker only registers in production builds. Icons in `public/` were drawn from the game's own pod and terrain art.
