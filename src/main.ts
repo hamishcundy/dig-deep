@@ -1,11 +1,13 @@
 import '@fontsource/jersey-10/latin-400.css';
 import Phaser from 'phaser';
+import { initAnalytics } from './analytics';
 import { initPwa } from './pwa';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 
 async function start(): Promise<void> {
   initPwa(); // early, so the browser's install offer isn't missed
+  initAnalytics(); // before Phaser, so it sees the tab hide before the game pauses
   // Phaser draws text to canvas, so the font must be loaded before any text is made.
   try {
     await document.fonts.load('16px "Jersey 10"');

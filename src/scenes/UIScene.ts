@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ECONOMY, ITEMS, MAX_ITEM_SLOTS, METRES_PER_TILE, ORES, UPGRADES, type BuildingKind, type ItemKey, type UpgradeKey } from '../config';
+import { setStatsOn, statsOn, track } from '../analytics';
 import { sound } from '../audio/sound';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
@@ -175,7 +176,8 @@ export class UIScene extends Phaser.Scene {
         const label = `${name} ${current} → ${format(s.value(key, s.levels[key] + 1))}`;
         const detail = `$${price.toLocaleString()}`;
         if (price > s.money) return { label, detail, disabled: true };
-        return { label, detail, onClick: () => (s.buyUpgrade(key), sound.upgrade(), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
+        const buy = () => s.buyUpgrade(key) && track('upgrade_bought', { upgrade: key, level: s.levels[key], price, money: Math.round(s.money) });
+        return { label, detail, onClick: () => (buy(), sound.upgrade(), this.toast(`${name} upgraded`, 0xc39bff), refresh()) };
       });
       this.showPanel({
         title: 'Shop',
@@ -201,7 +203,8 @@ export class UIScene extends Phaser.Scene {
         const detail = `$${price.toLocaleString()}`;
         const { name, icon } = ITEMS[key];
         const disabled = s.itemSlotsFull || price > s.money;
-        return { label: name, detail, icon, disabled, onClick: () => (s.buyItem(key), sound.coin(), refresh()) };
+        const buy = () => s.buyItem(key) && track('item_bought', { item: key, price });
+        return { label: name, detail, icon, disabled, onClick: () => (buy(), sound.coin(), refresh()) };
       });
       this.showPanel({
         title: 'Repair',
@@ -230,6 +233,7 @@ export class UIScene extends Phaser.Scene {
       buttons: [
         { label: 'Resume', onClick: resume },
         this.soundButton(() => this.showPause()),
+        { label: statsOn() ? 'Share stats: on' : 'Share stats: off', onClick: () => (setStatsOn(!statsOn()), this.showPause()) },
         { label: 'New game', onClick: () => this.confirmNewGame(() => this.showPause()) },
       ],
       onCancel: resume,
