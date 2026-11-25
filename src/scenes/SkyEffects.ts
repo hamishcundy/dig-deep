@@ -19,6 +19,8 @@ export interface SkyHandlers {
   hurt(amount: number): boolean;
   // Loose ore touched the pod; returns true if it went into the cargo bay.
   collect(ore: number, x: number, y: number): boolean;
+  // A blast cloud went off at (x, y) px, for anything else it might catch.
+  exploded(x: number, y: number): void;
 }
 
 // What happens to the sky blocks during play: blast clouds on a fuse setting each
@@ -168,6 +170,7 @@ export class SkyEffects {
     this.fire.emitParticleAt(x, y, 36);
     this.scene.cameras.main.shake(220, 0.01);
     sound.boom();
+    this.handlers.exploded(x, y);
 
     const [px, py] = [pod.x + pod.w / 2, pod.y + pod.h / 2];
     if (Math.hypot(px - x, py - y) > hurtRange * TILE || this.hurtGap > 0) return false;

@@ -12,6 +12,7 @@ export interface SaveData {
   cells: Uint8Array;
   stats: PodStats;
   col: number;
+  lair?: boolean; // the cells include Guams' lair; saves from before it don't
 }
 
 export function loadSave(): SaveData | null {
@@ -28,7 +29,7 @@ export function loadSave(): SaveData | null {
     stats.cargo = ORES.map((_, i) => o.stats.cargo[i] ?? 0); // saves from before the sky ores have fewer
     stats.levels = { ...stats.levels, ...o.stats.levels };
     stats.items = (Array.isArray(o.stats.items) ? o.stats.items : []).filter((k: string): k is ItemKey => k in ITEMS).slice(0, MAX_ITEM_SLOTS);
-    return { seed: o.seed, cells: fromBase64(o.cells), stats, col: o.col };
+    return { seed: o.seed, cells: fromBase64(o.cells), stats, col: o.col, lair: o.lair === true };
   } catch {
     return null;
   }
@@ -39,7 +40,7 @@ export function writeSave(data: SaveData): void {
   try {
     localStorage.setItem(
       KEY,
-      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, deepest, fuel, hull, cargo, levels, items }, col: data.col }),
+      JSON.stringify({ v: VERSION, seed: data.seed, cells: toBase64(data.cells), stats: { money, deepest, fuel, hull, cargo, levels, items }, col: data.col, lair: true }),
     );
   } catch {
     // storage full or blocked (e.g. private browsing): play on without saving

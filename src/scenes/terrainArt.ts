@@ -38,6 +38,7 @@ const CLOUD_STYLES = [
   { hi: '#dcfff5', mid: '#7fe3c8', lo: '#379d90' }, // bounce cloud
   { hi: '#e8decd', mid: '#b6a993', lo: '#786e5f' }, // crumbling cloud
   { hi: '#8d7fd1', mid: '#4a3f8f', lo: '#2a2360' }, // stardust
+  { hi: '#fff0a0', mid: '#d9a521', lo: '#7a5410' }, // Guams' hoard: a heap of coins
 ];
 const FRAME_COUNT = Frame.cloud(CLOUD_STYLES.length - 1, 15, CLOUD_VARIANTS - 1) + 1;
 
@@ -47,7 +48,10 @@ export function cloudStyle(tile: number): number {
   if (tile === Tile.Blast) return 1;
   if (tile === Tile.Bounce) return 2;
   if (tile === Tile.Crumble) return 3;
-  if (isOre(tile) && ORES[oreIndex(tile)].sky) return ORES[oreIndex(tile)].name === 'Stardust' ? 4 : 0;
+  if (isOre(tile) && ORES[oreIndex(tile)].sky) {
+    const ore = ORES[oreIndex(tile)];
+    return ore.hoard ? 5 : ore.name === 'Stardust' ? 4 : 0;
+  }
   return -1;
 }
 
@@ -386,6 +390,28 @@ function wander(mark: (x: number, y: number, color: string) => void, x0: number,
   }
 }
 
+// Guams' hoard: coins and the odd gem over a heap of gold (the heap is the cloud
+// style under it, so the mound keeps its rounded edges).
+function drawHoard(ctx: CanvasRenderingContext2D, ox: number, oy: number, rand: () => number) {
+  for (let i = 0; i < 26; i++) {
+    const x = ox + 3 + Math.floor(rand() * (TILE - 8));
+    const y = oy + 4 + Math.floor(rand() * (TILE - 8));
+    ctx.fillStyle = rand() < 0.15 ? '#b8860b' : '#ffcf33';
+    ctx.fillRect(x, y, 3, 2);
+    dot(ctx, x, y, '#fff6c8');
+    ctx.fillStyle = '#8a5e0c';
+    ctx.fillRect(x, y + 2, 3, 1);
+  }
+  const gems = ['#e0115f', '#2ecc71', '#5dade2', '#b9a8ff'];
+  for (let i = 0; i < 2; i++) {
+    const x = ox + 6 + Math.floor(rand() * (TILE - 14));
+    const y = oy + 7 + Math.floor(rand() * (TILE - 14));
+    ctx.fillStyle = gems[Math.floor(rand() * gems.length)];
+    ctx.fillRect(x, y, 3, 3);
+    dot(ctx, x, y, '#ffffff');
+  }
+}
+
 // Stardust: bright points scattered through a dark tile.
 function drawStars(ctx: CanvasRenderingContext2D, ox: number, oy: number, rand: () => number) {
   for (let i = 0; i < 12; i++) {
@@ -419,7 +445,8 @@ const METAL_LOOK: Record<string, MetalLook> = {
 
 function drawOre(ctx: CanvasRenderingContext2D, x: number, y: number, i: number, rand: () => number) {
   const ore = ORES[i];
-  if (ore.name === 'Stardust') drawStars(ctx, x, y, rand);
+  if (ore.hoard) drawHoard(ctx, x, y, rand);
+  else if (ore.name === 'Stardust') drawStars(ctx, x, y, rand);
   else if (GEMS.has(ore.name)) drawGems(ctx, x, y, ore.color, rand);
   else drawGrains(ctx, x, y, ore.color, METAL_LOOK[ore.name] ?? { glint: 0.1 }, rand);
 }

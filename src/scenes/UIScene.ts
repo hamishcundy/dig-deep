@@ -104,6 +104,10 @@ export class UIScene extends Phaser.Scene {
     this.hud.toast(message, color, hold);
   }
 
+  say(message: string, color?: number, hold?: number): void {
+    this.hud.say(message, color, hold);
+  }
+
   // World position (px) of a just-collected ore, for the fly-to-cargo effect.
   oreCollected(oreIndex: number, worldX: number, worldY: number): void {
     const cam = this.gameScene.cameras.main;
@@ -325,17 +329,20 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  // After Gorlab falls: what the run took, then carry on in the same world or start again.
-  showEnding(summary: { reward: number; playTime: number; trips: number; deaths: number }): void {
+  // After a boss falls: what the run took, then carry on in the same world or start again.
+  showEnding(summary: { boss: 'gorlab' | 'guams'; reward: number; playTime: number; trips: number; deaths: number }): void {
     const minutes = Math.round(summary.playTime / 60);
     const time = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+    const gorlab = summary.boss === 'gorlab';
     this.showPanel({
-      title: 'Gorlab is defeated',
+      title: gorlab ? 'Gorlab is defeated' : 'Guams is defeated',
       lines: [
-        'You reached the bottom of the world and won. The sky has opened above you, too: fly up.',
-        ['Reward', `$${summary.reward.toLocaleString()}`],
+        gorlab
+          ? 'You reached the bottom of the world and won. The sky has opened above you, too: fly up.'
+          : 'You reached the top of the sky and won. His hoard is yours: dig it out and sell it.',
+        ...(gorlab ? [['Reward', `$${summary.reward.toLocaleString()}`] as [string, string]] : []),
         ['Time played', time],
-        ['Trips down', `${summary.trips}`],
+        ['Trips', `${summary.trips}`],
         ['Pods lost', `${summary.deaths}`],
       ],
       buttons: [

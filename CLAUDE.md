@@ -18,6 +18,7 @@ Motherload-style mining game. Phaser 4.2 + TypeScript + Vite, deployed to GitHub
 - `src/pod/Pod.ts`: movement, drilling (down, sideways, and up on sky blocks), bounce clouds.
 - `src/game/`: `PodStats` (money, cargo, upgrades, items, shattering), `save.ts` (the surface snapshot, rolled back on death), `progress.ts` (per-world state that survives death: Gorlab's wounds, sky open, totals).
 - `src/boss/Gorlab.ts` + `src/scenes/GorlabView.ts` / `gorlabArt.ts`: the boss at 600 m.
+- `src/boss/Guams.ts` + `guamsShape.ts` (pose geometry shared by art and hit boxes) + `guamsLines.ts` (his lines and the weak-spot tips), `src/scenes/GuamsView.ts` / `guamsArt.ts`: the dragon on his hoard at the top of the sky. His lair is built into the top rows by `World.buildLair`, and stamped onto saves without the `lair` flag.
 - `src/scenes/SkyEffects.ts`: blast-cloud fuses and chains, crumbling clouds, loose ore.
 - `src/scenes/terrainArt.ts`: the whole tileset drawn in code (dirt bands, ore grains, rocks, cloud styles).
 - `src/ui/`: HUD, panels, item bar. Buttons use `onTap` (`src/ui/tap.ts`), which needs press and release on the button: a finger lifted off the joystick must never press one.
@@ -50,4 +51,5 @@ The game has loyal players with long-running saves. Every update must load their
 - After hot reload, import a module through its `?t=` URL (from `performance.getEntriesByType('resource')`) to get the app's instance.
 - The pane can't run service workers: test offline play with headless Chrome over CDP (`--remote-debugging-port`, `Network.emulateNetworkConditions`).
 - Sound can't be heard in the pane: render it with an `OfflineAudioContext`.
-- Gorlab and the sky need `digdeep-progress` set (`gorlabDefeated: true`) for a seed.
+- Gorlab and the sky need `digdeep-progress` set (`gorlabDefeated: true`) for a seed. Guams' state is in the same key (`guamsStirs`, `guamsAwake`, `guamsHits`, `guamsDefeated`). Leaving a page can write its own progress over a value you just set: also set it on the running scene (`game.scene.getScene('game').progress`) before reloading.
+- Tweens time themselves with the real clock, so when stepping frames by hand, fades and tweens barely move. Check them with the loop running in real time.

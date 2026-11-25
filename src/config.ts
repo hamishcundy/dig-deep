@@ -151,6 +151,30 @@ export const GORLAB = {
   reward: 500000,
 };
 
+// Guams: the dragon asleep on a hoard at the top of the sky. Taking hoard tiles
+// stirs him; once awake he stays awake until beaten, flying at the pod whenever it
+// comes up into his lair. Only dynamite at the bare patch on his chest hurts him,
+// and that only shows while he rears up to breathe, or reels from a blast cloud.
+export const GUAMS = {
+  lair: { c0: 11, c1: 24, islandTop: 7, islandRows: 3 }, // cloud island, in tiles; hoard heaped on top
+  arenaRows: 14, // the pod is in his lair above this row
+  stirsToWake: [2, 4], // hoard tiles taken before he wakes (picked per world)
+  hits: 6, // dynamite blasts on the patch to win; damage stays between trips
+  hitRange: 2, // tiles from the patch that a blast still counts
+  wakeRange: 3, // tiles: dynamite this close wakes him
+  speed: 7, // tiles/s flying; a maxed pod does 11 across, 14.8 up
+  accel: 3, // how quickly he turns (1/s)
+  attackGap: 2.2, // seconds between attacks
+  contactDps: 5, // hull per second while touching him
+  swoop: { windup: 0.5, speed: 16, damage: 15, knock: 10 },
+  // Rears up (windup, patch showing), then breathes a stream at the pod. It can
+  // only aim forward and down, so tucked in under his chest is safe from it.
+  breath: { range: 7, windup: 1, duration: 1.5, length: 8, halfAngle: 0.35, dps: 10, maxDown: 0.8 },
+  reel: 2, // seconds stunned, patch showing, after a blast cloud goes off beside him
+  reelRange: 1.5, // tiles from his body
+  fightZoom: 0.8, // camera zooms out this much in his lair, so he fits on a phone
+};
+
 export const EARTHQUAKE = {
   chance: 1 / 40, // per building left
   minDepth: 100, // metres; first reaching this starts them, so brand new players learn the basics first
@@ -191,6 +215,7 @@ export interface OreDef {
   weight: number; // relative spawn weight once unlocked
   color: number;
   sky?: boolean; // found on islands instead of underground, and fragile
+  hoard?: boolean; // Guams' gold: only in his lair, never generated, doesn't shatter
 }
 
 export const ORES: OreDef[] = [
@@ -206,6 +231,7 @@ export const ORES: OreDef[] = [
   { name: 'Stormglass', price: 1500, minDepth: 100, weight: 6, color: 0x35dcf0, sky: true },
   { name: 'Sunstone', price: 5000, minDepth: 180, weight: 6, color: 0xffa81f, sky: true },
   { name: 'Stardust', price: 15000, minDepth: 240, weight: 5, color: 0xb9a8ff, sky: true },
+  { name: 'Hoard', price: 40000, minDepth: Infinity, weight: 0, color: 0xffcf33, sky: true, hoard: true },
 ];
 
 // Ground layers by depth. Each changes the look of dirt and tunnel walls.

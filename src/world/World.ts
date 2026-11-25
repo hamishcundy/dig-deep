@@ -1,4 +1,4 @@
-import { BUILDINGS, GEN, GORLAB, ORES, SKY, WORLD } from '../config';
+import { BUILDINGS, GEN, GORLAB, GUAMS, ORES, SKY, TILE, WORLD } from '../config';
 import { Tile, oreTile } from './tiles';
 
 // Small, fast seeded RNG (mulberry32) so a seed always builds the same world.
@@ -108,6 +108,28 @@ export class World {
     }
     this.carveCavern();
     this.generateSky();
+    this.buildLair();
+  }
+
+  // Guams' lair in the empty rows at the very top of the sky: a cloud island with
+  // his hoard heaped on it, and clumps of blast cloud around it in the open air.
+  // Also run on loaded saves from before the lair existed (those rows were empty).
+  buildLair(): void {
+    const { c0, c1, islandTop, islandRows } = GUAMS.lair;
+    for (let i = 0; i < islandRows; i++) {
+      for (let c = c0 + i; c <= c1 - i; c++) this.set(c, islandTop + i, Tile.Cloud);
+    }
+    const hoard = oreTile(ORES.findIndex((o) => o.hoard));
+    for (let c = c0 + 1; c <= c1 - 1; c++) this.set(c, islandTop - 1, hoard);
+    for (let c = c0 + 2; c <= c1 - 2; c++) this.set(c, islandTop - 2, hoard);
+    const blasts = [[3, 2], [4, 2], [3, 3], [31, 2], [32, 2], [32, 3], [6, 8], [7, 8], [28, 8], [29, 8]];
+    for (const [c, r] of blasts) this.set(c, r, Tile.Blast);
+  }
+
+  // Top of the hoard (px), where Guams lies, and the middle of the lair.
+  get lairCentre(): { x: number; top: number } {
+    const { c0, c1, islandTop } = GUAMS.lair;
+    return { x: ((c0 + c1 + 1) / 2) * TILE, top: (islandTop - 2) * TILE };
   }
 
   // Floating islands: wherever smooth noise is high enough. Patches of blast and

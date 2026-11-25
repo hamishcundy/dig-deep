@@ -62,7 +62,7 @@ export class PodStats {
     const chance = severity * SKY.maxShatter * (1 - this.value('padding'));
     let lost = 0;
     ORES.forEach((ore, i) => {
-      if (!ore.sky) return;
+      if (!ore.sky || ore.hoard) return;
       for (let n = this.cargo[i]; n > 0; n--) {
         if (Math.random() < chance) {
           this.cargo[i]--;

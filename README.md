@@ -10,7 +10,7 @@ npm run build    # static site in dist/
 
 Controls: arrows / WASD on desktop; on a phone, drag anywhere on the left of the screen.
 
-What's in it: digging for ore across five ground layers, fuel, hull and cargo, surface buildings (fuel, sell, repair and supplies, upgrade shop), single-use items in upgradable slots, earthquakes, darkness with a headlight, Gorlab the boss at 600 m, and after beating him a sky level of floating islands with fragile ore, blast, bounce and crumbling clouds.
+What's in it: digging for ore across five ground layers, fuel, hull and cargo, surface buildings (fuel, sell, repair and supplies, upgrade shop), single-use items in upgradable slots, earthquakes, darkness with a headlight, Gorlab the boss at 600 m, and after beating him a sky level of floating islands with fragile ore, blast, bounce and crumbling clouds, topped by Guams the dragon asleep on his hoard.
 
 Progress saves in the browser (localStorage) at each surface stop.
 

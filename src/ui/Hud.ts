@@ -48,6 +48,7 @@ export class Hud {
   private money: Phaser.GameObjects.Text;
   private coin: Phaser.GameObjects.Image;
   private toastText: Phaser.GameObjects.Text | null = null;
+  private sayText: Phaser.GameObjects.Text | null = null;
   private shownMoney = -1; // counts up toward the real amount
 
   constructor(private scene: Phaser.Scene) {
@@ -146,5 +147,18 @@ export class Hud {
       .setOrigin(0.5);
     this.toastText = text;
     this.scene.tweens.add({ targets: text, y: 100, alpha: 0, delay: hold, duration: 700, onComplete: () => text.destroy() });
+  }
+
+  // A longer line under the toasts, wrapped to the screen: what a boss says, or a tip.
+  say(message: string, color = 0xffffff, hold = 2600): void {
+    if (this.sayText) {
+      this.scene.tweens.killTweensOf(this.sayText);
+      this.sayText.destroy();
+    }
+    const { width } = this.scene.scale;
+    const style = { ...textStyle(26, '#' + color.toString(16).padStart(6, '0')), align: 'center', wordWrap: { width: Math.min(560, width - 40) } };
+    const text = this.scene.add.text(width / 2, 168, message, style).setStroke('#000000', 5).setOrigin(0.5, 0);
+    this.sayText = text;
+    this.scene.tweens.add({ targets: text, alpha: 0, delay: hold, duration: 600, onComplete: () => text.destroy() });
   }
 }

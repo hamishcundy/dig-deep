@@ -9,6 +9,14 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: 6,
+    title: 'Guams',
+    notes: [
+      'A dragon sleeps on a hoard of gold at the top of the sky. Each piece is worth $40,000, if you can take it.',
+      'Dynamite bounces off his armour. Watch for a weak spot.',
+    ],
+  },
+  {
     id: 5,
     title: 'Fix',
     notes: ['Losing the pod while steering could start a new game by accident. Buttons now need a proper tap, and New game always asks first.'],
