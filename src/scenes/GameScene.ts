@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { sound } from '../audio/sound';
+import { position, setStateSource, surfaceStop, track } from '../analytics';
 import { Gorlab } from '../boss/Gorlab';
 import { BUILDINGS, DYNAMITE_RADIUS, EARTHQUAKE, FALL, FUEL, GORLAB, METRES_PER_TILE, ORES, PHYSICS, SKY, SPAWN_COL, TILE, VIEW, WORLD, type BuildingDef, type ItemKey } from '../config';
 import { PodStats } from '../game/PodStats';
@@ -112,6 +113,8 @@ export class GameScene extends Phaser.Scene {
       this.ui.showTitle(resumed);
     });
     this.game.events.on(Phaser.Core.Events.HIDDEN, () => this.pause()); // e.g. switching apps on a phone
+    setStateSource(() => ({ stats: this.stats, progress: this.progress, screen: this.mode }));
+    track('session_start', { resumed, seeded: urlSeed !== null });
   }
 
   // The camera stops at the pod's ceiling, so the closed-off sky can't be seen.
@@ -161,6 +164,7 @@ export class GameScene extends Phaser.Scene {
     const dug = pod.update(dt, stick, power);
     if (dug) this.onDug(dug);
     stats.deepest = Math.max(stats.deepest, world.depthOf(pod.row));
+    position(world.seed, world.depthOf(pod.row) * METRES_PER_TILE);
     this.progress.playTime += dt;
     if (pod.row >= world.surfaceRow) this.wentUnderground = true;
     if (this.gorlab && this.updateGorlab(dt)) return; // destroyed by it
@@ -186,6 +190,7 @@ export class GameScene extends Phaser.Scene {
     const atSurface = pod.grounded && !pod.drill && pod.row === world.surfaceRow - 1;
     if (atSurface && !this.wasAtSurface) {
       if (this.wentUnderground) this.progress.trips++;
+      surfaceStop({ cargo_value: stats.cargoValue, cargo_count: stats.cargoCount, fuel: Math.round(stats.fuel), hull: Math.round(stats.hull) });
       this.wentUnderground = false;
       this.takeSnapshot();
     }
@@ -278,6 +283,7 @@ export class GameScene extends Phaser.Scene {
       sound.roar();
       this.cameras.main.shake(700, 0.012);
       this.ui.toast('Gorlab has woken!', 0xff6a1a, 2000);
+      track('gorlab_woke', { hits: this.gorlab!.hits });
     }
     if (frame.started === 'breath') sound.breath();
     if (frame.started === 'tail') {
@@ -291,6 +297,7 @@ export class GameScene extends Phaser.Scene {
   private onGorlabBlast(result: 'hit' | 'defeated'): void {
     const g = this.gorlab!;
     this.progress.gorlabHits = g.hits;
+    track(result === 'hit' ? 'gorlab_hit' : 'gorlab_defeated', { hits: g.hits, play_minutes: Math.round(this.progress.playTime / 60), trips: this.progress.trips, deaths: this.progress.deaths });
     if (result === 'hit') {
       this.gorlabView!.hit();
       sound.roar();
@@ -347,6 +354,7 @@ export class GameScene extends Phaser.Scene {
     const own = PHYSICS.thrust * thrust - PHYSICS.gravity;
     if (stick.y < -0.3 && stats.fuel > 0 && own > 0 && gap > stopping(own)) return;
     stats.items.splice(slot, 1);
+    track('item_used', { item: 'thrusters' });
     this.braking = true;
     this.ui.toast('Landing thrusters fired', 0xffc531);
     sound.thrusters();
@@ -370,7 +378,10 @@ export class GameScene extends Phaser.Scene {
   useItem(slot: number): void {
     const key = this.stats.items[slot];
     if (this.mode !== 'play' || !key) return;
-    if (this.applyItem(key)) this.stats.items.splice(slot, 1);
+    if (this.applyItem(key)) {
+      this.stats.items.splice(slot, 1);
+      track('item_used', { item: key });
+    }
   }
 
   private applyItem(key: ItemKey): boolean {
@@ -506,6 +517,8 @@ export class GameScene extends Phaser.Scene {
     this.mode = 'dead';
     this.progress.deaths++;
     saveProgress(this.progress);
+    const { stats, world, pod } = this;
+    track('death', { reason, metres: world.depthOf(pod.row) * METRES_PER_TILE, cargo_value: stats.cargoValue, money: Math.round(stats.money) });
     this.pod.thrusting = false;
     this.cameras.main.shake(300, 0.012);
     sound.crash();
@@ -527,6 +540,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   newGame(): void {
+    track('new_game');
     clearSave();
     clearProgress();
     const url = new URL(location.href);

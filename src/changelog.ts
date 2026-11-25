@@ -9,6 +9,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: 6,
+    title: 'Play stats',
+    notes: ['The game now sends anonymous play stats, like how deep you get, to help improve it. No names or emails. Turn it off in the pause menu.'],
+  },
+  {
     id: 5,
     title: 'Fix',
     notes: ['Losing the pod while steering could start a new game by accident. Buttons now need a proper tap, and New game always asks first.'],

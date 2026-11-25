@@ -23,11 +23,21 @@ Motherload-style mining game. Phaser 4.2 + TypeScript + Vite, deployed to GitHub
 - `src/ui/`: HUD, panels, item bar. Buttons use `onTap` (`src/ui/tap.ts`), which needs press and release on the button: a finger lifted off the joystick must never press one.
 - `src/audio/sound.ts`: all sound, synthesised with Web Audio.
 - `public/sw.js` + `src/pwa.ts`: offline cache and home-screen install.
+- `src/analytics.ts`: anonymous play stats to PostHog (see Analytics below).
 
 ## Saves
 
 - `digdeep-save` (surface snapshot, version 1), `digdeep-progress` (per seed), `digdeep-muted`, `digdeep-seen` (What's New).
 - `?seed=123` ignores the save (progress still loads for that seed).
+
+## Analytics
+
+- `src/analytics.ts` sends anonymous play stats to PostHog (US) over its `/batch/` HTTP API, with no SDK. Players turn it off from the pause menu (`Share stats`); Global Privacy Control starts it off.
+- The project key (`phc_…`) in `KEY` is public by design: it can only send events. **Never commit a personal key (`phx_…`) or a project secret key (`phs_…`).**
+- Only the live host sends. Dev builds log `[stats]` events to the console. To check a local `npm run build && npm run preview`, set `localStorage['digdeep-stats-force'] = '1'` (events are tagged `tester`). `?tester` tags a device's play as the owner's or a tester's; `?tester=0` clears it.
+- localStorage: `digdeep-player` (random id), `digdeep-stats-off`, `digdeep-tester`, `digdeep-events` (unsent queue), `digdeep-stats-marks` (depth and height milestones sent, per world).
+- Events: `session_start`, `session_end` (tab hidden: the quit point), `depth_reached` / `height_reached` (every 50 m, once per world), `trip_end`, `death`, `upgrade_bought`, `item_bought`, `item_used`, `gorlab_woke`, `gorlab_hit`, `gorlab_defeated`, `new_game`. `session_start`, `trip_end`, `session_end` and `new_game` also set the player's save state on their PostHog person.
+- New events: add a `track()` call. Keep it to moments that matter, and never send names, free text or the world cells.
 
 ## Backward compatibility: players' saves must survive every update
 
